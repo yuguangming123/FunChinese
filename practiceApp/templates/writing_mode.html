@@ -1,0 +1,1224 @@
+{% extends "pra_base.html" %}{% load static %}
+{% block title %}写字模式-{{ lesson.name }}{% endblock %}
+{% block extra_head %}
+<script src="{% static 'plugins/hanzi-writer/hanzi-writer.min.js' %}"></script>
+<script src="{% static 'plugins/cnchar/cnchar.min.js' %}"></script>
+<script src="{% static 'plugins/cnchar/cnchar.radical.min.js' %}"></script>
+<script src="{% static 'plugins/cnchar/cnchar.words.min.js' %}"></script>
+<script src="{% static 'plugins/cnchar/cnchar.explain.min.js' %}"></script>
+<script src="{% static 'plugins/cnchar/cnchar.trad.min.js' %}"></script>
+{% endblock %}
+{% block content %}
+<div class="practice-page"><div class="mode-panel active">
+  <div class="content-area" id="writingContentArea">
+    <div class="typing-toggles">
+      <label class="toggle-switch">
+        <input type="checkbox" id="toggleImage" checked>
+        <span class="toggle-slider"></span>
+        <span class="toggle-label">显示图片</span>
+      </label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="togglePinyin" checked>
+        <span class="toggle-slider"></span>
+        <span class="toggle-label">显示拼音</span>
+      </label>
+      <div style="margin-left:auto; display:flex; align-items:center; gap:12px;">
+        <button class="typing-help-btn" style="margin-left:0;" onclick="showStrokeSettings()" title="笔顺速度设置"><i class="fas fa-sliders-h"></i></button>
+        <button class="typing-help-btn" style="margin-left:0;" onclick="showWritingHelp()" title="操作帮助"><i class="fas fa-question-circle"></i></button>
+      </div>
+    </div>
+    <div class="sentence-image" id="sentenceImage"></div>
+    <div id="writingEnglish"></div>
+    <div class="writing-words" id="writingWords"></div>
+    <div class="writing-area">
+      <div class="drawing-panel"><div class="drawing-inner" id="drawingPanel"><img id="drawingImg" alt="字义简笔画"><span class="drawing-fallback" id="drawingFallback"></span></div></div>
+      <div class="writing-grid">
+        <div class="char-cell"><span class="cell-char"></span><div class="char-stroke" id="charStroke"></div></div>
+      </div>
+      <div class="info-panel"><div class="info-inner" id="infoPanel">
+        <div class="info-row info-row-pron" id="infoRowPron"></div>
+        <div class="info-row"><div class="info-col"><b>部首：</b><span id="infoRadical">－</span></div><div class="info-col"><b>繁体：</b><span id="infoTrad">－</span></div></div>
+        <div class="info-row"><div class="info-col"><b>结构：</b><span id="infoStruct">－</span></div><div class="info-col"><b>组词：</b><span id="infoWords">－</span></div></div>
+        <div class="info-row"><div class="info-col"><b>笔画：</b><span id="infoStroke">－</span></div><div class="info-col"><b>释义：</b><span id="infoDict">－</span></div></div>
+      </div></div>
+    </div>
+    <button type="button" class="rewrite-btn" id="rewriteBtn">✏️ 重写</button>
+    <div class="write-progress" id="writeProgress"></div>
+  </div>
+</div></div>
+
+<style>
+#writingEnglish {
+  text-align: center; color: #20c997; font-size: 16px; font-weight: 700;
+  margin: 16px 24px 4px;
+}
+.writing-words {
+  display: flex; justify-content: center; align-items: flex-start;
+  flex-wrap: wrap; gap: 10px; margin: 4px 24px 4px;
+}
+.ww-col {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.ww-pinyin {
+  font-size: 16px; color: #f57c00; text-align: center;
+  letter-spacing: 1px; min-height: 1.4em; white-space: nowrap;
+}
+.ww-pinyin.hidden { display: none; }
+.ww-chars {
+  display: flex; font-size: 32px; font-weight: 600; color: #2563eb;
+  line-height: 1.4; text-align: center; white-space: nowrap;
+}
+.ww-chars .wc-char {
+  display: inline-block; cursor: pointer; padding: 0 2px;
+  border-radius: 4px; transition: all 0.15s;
+}
+.ww-chars .wc-char:hover { background: rgba(32, 201, 151, 0.12); }
+.ww-chars .wc-char.cur-char {
+  background: rgba(32, 201, 151, 0.18);
+  box-shadow: inset 0 -3px 0 #20c997;
+}
+.ww-chars .wc-char.done { color: #22c55e; }
+/* 米字格下方「重写」按钮 */
+.rewrite-btn {
+  display: none;
+  margin: 6px auto 0;
+  padding: 6px 22px;
+  border: none; border-radius: 20px;
+  background: #e8f5e9; color: #22c55e;
+  font-size: 14px; font-weight: 600; cursor: pointer;
+  transition: all 0.2s;
+}
+.rewrite-btn:hover { background: #d3f0d7; }
+.rewrite-btn.show { display: inline-block; }
+.ww-punct {
+  font-size: 32px; font-weight: 700; color: #1a1a1a;
+  line-height: 1.6; user-select: none; align-self: flex-end; padding-bottom: 4px;
+}
+
+/* 视口缩小时禁止 flex 压缩图片高度，保持长宽比不变 */
+.sentence-image { flex-shrink: 0; }
+/* 图片完整显示、保持原始宽高比（不裁剪、不变形），超出部分在框内留白 */
+.sentence-image img { object-fit: contain; }
+
+/* 巨大汉字米字格：十字线 + 两条对角线，红色网格线，可容纳 100px 字号 */
+.writing-area {
+  display: flex; align-items: center; justify-content: center;
+  gap: 28px; flex-shrink: 0; padding: 20px 0 8px;
+}
+/* 左侧配图框：flex:1 区域，内容靠右贴米字格（间距 = gap 28px） */
+.drawing-panel {
+  flex: 1; min-width: 0;
+  display: flex; align-items: center; justify-content: flex-end;
+}
+.drawing-inner {
+  width: 170px; height: 170px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: #f8f9fb; border-radius: 12px; overflow: hidden;
+  border: 1px solid #f0f0f0;
+}
+.drawing-panel img { width: 100%; height: 100%; object-fit: contain; }
+/* 兜底层（emoji / 占位）默认隐藏，按需显示 */
+.drawing-fallback { display: none; }
+.drawing-fallback.drawing-emoji { display: flex; font-size: 96px; line-height: 1; }
+.drawing-fallback.drawing-fallback-text {
+  display: flex; flex-direction: column; align-items: center;
+  font-size: 56px; color: #ccc; font-weight: 700;
+}
+.drawing-fallback .drawing-hint { font-size: 12px; color: #aaa; font-weight: 400; text-align: center; }
+/* 右侧信息面板（与配图框等宽对称，保证米字格居中） */
+/* 右侧信息面板：flex:1 区域，内容靠左贴米字格（间距 = gap 28px） */
+.info-panel {
+  flex: 1; min-width: 0;
+  display: flex; align-items: center; justify-content: flex-start;
+}
+.info-inner {
+  width: auto; min-width: 170px; max-width: 600px; height: 170px;
+  box-sizing: border-box; flex-shrink: 0;
+  display: flex; flex-direction: column; gap: 8px; justify-content: space-evenly;
+  background: #f8f9fb; border-radius: 12px; padding: 12px;
+}
+.info-panel .info-char { font-size: 36px; font-weight: 700; color: #2563eb; line-height: 1.2; }
+.info-row { display: flex; justify-content: space-between; gap: 10px; white-space: nowrap; }
+.info-col { flex: 1; font-size: 13px; color: #555; min-width: 0; white-space: nowrap; }
+.info-col b { color: #2563eb; margin-right: 4px; }
+.info-row-pron { justify-content: flex-start; flex-wrap: nowrap; }
+.pron-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border: 1px solid #20c997; color: #20c997;
+  border-radius: 14px; background: #fff; cursor: pointer;
+  font-size: 14px; font-weight: 600;
+}
+.pron-btn:hover { background: #e8f5e9; }
+.writing-grid {
+  /* 米字格固定宽度，位于 flex 中间（左右 flex:1 等宽 → 中心线与屏幕中心线重合） */
+  flex: 0 0 auto;
+  display: flex; justify-content: center; align-items: center;
+  padding: 0;
+}
+.char-cell {
+  --cell-color: #e74c3c;  /* 米字格线框/网格线颜色（可在书写设置中自定义） */
+  color: var(--cell-color);  /* 供 SVG 网格线 currentColor 使用 */
+  position: relative;
+  width: 170px; height: 170px;
+  border: 3px solid var(--cell-color);
+  border-radius: 6px;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
+  box-shadow: 0 2px 10px var(--cell-color);
+}
+.char-cell .cell-char {
+  position: absolute; left: 0; top: 0;
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 140px; font-weight: 700; color: #999;
+  font-family: "楷体", KaiTi, "STKaiti", "SimKai", serif;
+  line-height: 1;
+  z-index: 1;
+}
+/* 笔顺动画/描摹 SVG 挂载层（覆盖在灰色文本之上，接收指针输入） */
+.char-stroke {
+  position: absolute; left: 0; top: 0;
+  width: 100%; height: 100%; z-index: 2;
+}
+.char-stroke svg { width: 100%; height: 100%; display: block; }
+/* 有字形数据时隐藏楷体文本层，由 HanziWriter SVG 显示灰色字（与描摹完全重合） */
+.char-cell.hw-mode .cell-char { display: none; }
+/* 校验状态：米字格线框+网格线变绿（正确）/ 变红（错误） */
+.char-cell.ok {
+  color: #22c55e;          /* SVG 网格线随状态变绿 */
+  border-color: #22c55e;
+  box-shadow: 0 2px 10px rgba(34, 197, 94, 0.25);
+}
+.char-cell.ok .cell-char { color: #22c55e; }
+.char-cell.err .cell-char { color: #e74c3c; }
+.char-cell.err {
+  color: #e74c3c;          /* SVG 网格线随状态变红 */
+  border-color: #e74c3c;
+  box-shadow: 0 2px 10px rgba(231, 76, 60, 0.25);
+}
+/* 校验状态：强制 SVG 内笔画路径同步变色（覆盖 HanziWriter inline stroke） */
+.char-cell.ok .char-stroke path { stroke: #22c55e !important; }
+.char-cell.err .char-stroke path { stroke: #e74c3c !important; }
+/* 描摹状态：光标变为笔形（内联 SVG data-uri，笔尖热点在 (4,20)） */
+.writing-grid.write-mode {
+  cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><circle cx='6' cy='6' r='4' fill='%2322c55e'/></svg>") 6 6, crosshair;
+}
+.write-progress {
+  text-align: center; font-size: 13px; color: #aaa;
+  letter-spacing: 1px; min-height: 1.4em;
+}
+</style>
+{% endblock %}
+{% block extra_js %}
+<script>
+const EXERCISES_BY_MODE = {{ exercises_by_mode_json|safe }};
+let writingEx = [], writeIdx = 0, charIdx = 0;
+let charSeq = [], sessionScore = 0;
+const HAN_RE = /[一-鿿]/;
+
+// ---- 笔顺演示 / 描摹校验状态 ----
+let strokeWriter = null;   // HanziWriter 实例
+let strokePhase = 'idle';  // idle | demo | write
+let strokeTimer = null;    // 停顿定时器
+let writingLocked = false; // 防重入锁
+let sndCtx = null, sndBuf = {}; // 音效上下文与缓冲
+let charDone = [];   // 当前句每个汉字的书写完成标记（逐字校验用）
+const DONE_KEY = 'writingDone_' + {{ lesson.id }}; // 完成状态缓存键（按句子索引）
+
+// 书写配置（localStorage 持久化）：speed 值越小行笔越慢（默认 1）；delay 为笔画间停顿 ms；
+// drawingWidth/drawingColor 为描摹笔触粗细与颜色；strokeDemo 是否演示笔顺；strokeColor 为演示颜色；cellColor 为米字格颜色
+let strokeCfg = { speed: 0.5, delay: 500, drawingWidth: 12, drawingColor: '#e74c3c', strokeDemo: true, strokeColor: '#2563eb', cellColor: '#e74c3c', gridStyle: 2, precision: 1, scratchKey: '1' };
+try {
+  var _savedCfg = JSON.parse(localStorage.getItem('writing_strokeCfg') || '{}');
+  if (typeof _savedCfg.speed === 'number') strokeCfg.speed = _savedCfg.speed;
+  if (typeof _savedCfg.delay === 'number') strokeCfg.delay = _savedCfg.delay;
+  if (typeof _savedCfg.drawingWidth === 'number') strokeCfg.drawingWidth = _savedCfg.drawingWidth;
+  if (typeof _savedCfg.drawingColor === 'string') strokeCfg.drawingColor = _savedCfg.drawingColor;
+  if (typeof _savedCfg.strokeDemo === 'boolean') strokeCfg.strokeDemo = _savedCfg.strokeDemo;
+  if (typeof _savedCfg.strokeColor === 'string') strokeCfg.strokeColor = _savedCfg.strokeColor;
+  if (typeof _savedCfg.cellColor === 'string') strokeCfg.cellColor = _savedCfg.cellColor;
+  if (typeof _savedCfg.gridStyle === 'number') strokeCfg.gridStyle = _savedCfg.gridStyle;
+  if (typeof _savedCfg.precision === 'number') strokeCfg.precision = _savedCfg.precision;
+  if (strokeCfg.precision > 3 || strokeCfg.precision < 0.5) strokeCfg.precision = 1;  // 兼容旧值(350)/非法值 → 默认 leniency 1
+  if (typeof _savedCfg.scratchKey === 'string') strokeCfg.scratchKey = _savedCfg.scratchKey;
+} catch (e) {}
+// 应用米字格颜色（通过 CSS 变量 --cell-color 即时生效）
+function applyCellColor() {
+  var cell = document.querySelector('.char-cell');
+  if (cell) cell.style.setProperty('--cell-color', strokeCfg.cellColor);
+}
+// 生成网格 SVG 背景（颜色直接注入，避免 currentColor 在 data-URI 中不解析）
+function gridSVG(style, color) {
+  var c = 170, r = c / 2;
+  var inner = '';
+  var dash = (style === 1 || style === 3) ? ' stroke-dasharray="6,8"' : '';
+  var stroke = ' stroke="' + (color || '#e74c3c') + '" stroke-width="2"';
+  if (style !== 4) { // 田字格/米字格含十字中线
+    inner += '<line x1="0" y1="' + r + '" x2="' + c + '" y2="' + r + '"' + stroke + dash + '/>';
+    inner += '<line x1="' + r + '" y1="0" x2="' + r + '" y2="' + c + '"' + stroke + dash + '/>';
+  }
+  if (style === 2 || style === 3) { // 米字格含两条对角线
+    inner += '<line x1="0" y1="0" x2="' + c + '" y2="' + c + '"' + stroke + dash + '/>';
+    inner += '<line x1="' + c + '" y1="0" x2="0" y2="' + c + '"' + stroke + dash + '/>';
+  }
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + c + '" height="' + c + '" viewBox="0 0 ' + c + ' ' + c + '">' + inner + '</svg>';
+  return 'url("data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg) + '")';
+}
+// 应用网格样式（0=田字格实线 1=田字格虚线 2=米字格实线 3=米字格虚线 4=方格）；颜色跟随米字格颜色或校验状态色
+function applyGridStyle() {
+  var cell = document.querySelector('.char-cell');
+  if (!cell) return;
+  var color = strokeCfg.cellColor;
+  if (cell.classList.contains('ok')) color = '#22c55e';
+  else if (cell.classList.contains('err')) color = '#e74c3c';
+  cell.style.backgroundImage = gridSVG(strokeCfg.gridStyle, color);
+}
+function saveStrokeCfg() {
+  try { localStorage.setItem('writing_strokeCfg', JSON.stringify(strokeCfg)); } catch (e) {}
+}
+// 字形数据内存缓存（避免调节速度重建当前字时重复网络请求）
+let strokeDataCache = {};
+
+// 覆写 HanziWriter 字形数据加载：改为从本地 static/dicts/strokes 拉取（离线）
+if (window.HanziWriter) {
+  HanziWriter.loadCharacterData = function(char, onComplete, onError) {
+    if (strokeDataCache[char]) { onComplete(strokeDataCache[char]); return; }
+    fetch('{% static "dicts/strokes/" %}' + encodeURIComponent(char) + '.json')
+      .then(function(r) { if (!r.ok) throw new Error('no char data'); return r.json(); })
+      .then(function(d) { strokeDataCache[char] = d; onComplete(d); })
+      .catch(onError);
+  };
+}
+
+// 预加载当前句全部字形数据到缓存，切字时直接命中，避免网络等待导致的延迟/闪变
+function preloadCharData(chars) {
+  (chars || []).forEach(function(ch) {
+    if (!strokeDataCache[ch]) {
+      fetch('{% static "dicts/strokes/" %}' + encodeURIComponent(ch) + '.json')
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(d) { if (d) strokeDataCache[ch] = d; })
+        .catch(function() {});
+    }
+  });
+}
+
+// ---- 音效（预加载 sound/complete.wav、error.wav，用 Web Audio 播放）----
+function getSndCtx() {
+  if (!sndCtx) sndCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (sndCtx.state === 'suspended') sndCtx.resume();
+  return sndCtx;
+}
+function loadSnd(name, url) {
+  fetch(url).then(function(r) { return r.arrayBuffer(); }).then(function(buf) {
+    return getSndCtx().decodeAudioData(buf);
+  }).then(function(audio) { sndBuf[name] = audio; }).catch(function() {});
+}
+function playSfx(name) {
+  if (!sndBuf[name]) return;
+  try {
+    var src = getSndCtx().createBufferSource();
+    src.buffer = sndBuf[name];
+    src.connect(getSndCtx().destination);
+    src.start();
+  } catch (e) {}
+}
+
+// 笔尖书写沙沙声（循环播放，演示/描摹时使用）
+var scratchSrc = null;
+function playScratch() {
+  var key = strokeCfg.scratchKey;
+  if (!key || key === 'none') return;  // 关闭书写音效
+  var b = sndBuf['scratch' + key];
+  if (!b) return;
+  try {
+    stopScratch();
+    var c = getSndCtx();
+    var s = c.createBufferSource();
+    s.buffer = b;
+    var g = c.createGain();
+    g.gain.value = 1;
+    s.connect(g).connect(c.destination);
+    s.start();
+    scratchSrc = s;
+  } catch (e) {}
+}
+function stopScratch() {
+  if (scratchSrc) { try { scratchSrc.stop(); } catch (e) {} scratchSrc = null; }
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function hanziChars(str) {
+  return String(str || '').match(/[一-鿿]/g) || [];
+}
+
+// 从 word_analysis 提取全部汉字序列（跳过标点词），作为米字格逐字练习的字序列
+function hanziFromWordAnalysis(words) {
+  var out = [];
+  (words || []).forEach(function(w) {
+    if (isPunctWord(w)) return;
+    var wChars = Array.from(String(w.word || ''));
+    for (var j = 0; j < wChars.length; j++) {
+      if (HAN_RE.test(wChars[j])) out.push(wChars[j]);
+    }
+  });
+  return out;
+}
+
+function startNewSession(mode) {
+  fetch('{% url "practiceApp:start_session" %}', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+    body: JSON.stringify({lesson_id: {{ lesson.id }}, mode: mode, exercises: EXERCISES_BY_MODE[mode] || []})
+  });
+}
+
+function updateProgress() {
+  var total = writingEx.length, idx = writeIdx + 1, pct = total ? (idx / total * 100) : 0;
+  document.getElementById('listeningProgressText').textContent = idx + '/' + total;
+  document.getElementById('listeningProgressFill').style.width = pct + '%';
+  document.getElementById('listeningCounter').textContent = idx + '/' + total;
+  document.getElementById('listeningBottomFill').style.width = pct + '%';
+  document.getElementById('listeningScore').textContent = '得分: ' + (sessionScore || 0);
+}
+
+function render() {
+  if (!writingEx.length) return;
+  var q = writingEx[writeIdx];
+  var imgC = document.getElementById('sentenceImage');
+  imgC.innerHTML = q.image_url
+    ? '<img src="' + q.image_url + '" alt="sentence">'
+    : '<div class="placeholder"><i class="fas fa-image"></i></div>';
+  document.getElementById('writingEnglish').textContent = q.english || '';
+  var words0 = q.word_analysis || [];
+  charSeq = words0.length ? hanziFromWordAnalysis(words0) : hanziChars(q.chinese);
+  if (charIdx >= charSeq.length) charIdx = 0;
+  preloadCharData(charSeq);  // 预加载整句字形，切字零延迟
+  loadDone();
+  updateProgress();
+  selectChar(charIdx);
+  // 自动朗诵：进入新句子时朗读整句（尊重「自动朗读」设置）
+  if (q.chinese && localStorage.getItem('qwen3_auto_read') !== '0') {
+    setTimeout(function() {
+      VoicePlayer.startSpectrum('spectrumCanvas');
+      VoicePlayer.speak(q.chinese);
+    }, 300);
+  }
+}
+
+function isPunctWord(w) {
+  return w && !w.pinyin && !w.pos && !w.grammar;
+}
+
+function renderWords(q) {
+  var container = document.getElementById('writingWords');
+  var words = q.word_analysis || [];
+  if (!words.length) {
+    // 退化：无逐词分析时，拼音整句 + 汉字逐字（拼音类保留以支持 toggle 开关）
+    var chars = Array.from(String(q.chinese || ''));
+    var hi = 0, fb = '';
+    fb += '<div class="ww-pinyin">' + escHtml(q.pinyin || '') + '</div>';
+    fb += '<div class="ww-chars">';
+    for (var i = 0; i < chars.length; i++) {
+      if (HAN_RE.test(chars[i])) {
+        fb += '<span class="wc-char' + (hi === charIdx ? ' cur-char' : '') + (charDone[hi] ? ' done' : '') + '" data-idx="' + hi + '">' + escHtml(chars[i]) + '</span>';
+        hi++;
+      } else {
+        fb += '<span class="ww-punct">' + escHtml(chars[i]) + '</span>';
+      }
+    }
+    fb += '</div>';
+    container.innerHTML = fb;
+    return;
+  }
+  // 词列：每词一列（拼音在上、字在下），拼音与对应的字居中对齐。
+  // 数据源完全取自 word_analysis（word 键为汉字、pinyin 键为拼音），
+  // 不再与 sentences 的 chinese 字段比对，避免两处数据不一致导致的错位/重复。
+  var html = '', wi = 0;
+  for (var k = 0; k < words.length; k++) {
+    var w = words[k];
+    if (isPunctWord(w)) {
+      html += '<span class="ww-punct">' + escHtml(w.word || '') + '</span>';
+      continue;
+    }
+    var wText = w.word || '';
+    var wChars = Array.from(wText);
+    html += '<div class="ww-col"><div class="ww-pinyin">' + escHtml(w.pinyin || '') + '</div><div class="ww-chars">';
+    for (var j = 0; j < wChars.length; j++) {
+      var cls = 'wc-char' + (wi === charIdx ? ' cur-char' : '') + (charDone[wi] ? ' done' : '');
+      html += '<span class="' + cls + '" data-idx="' + wi + '">' + escHtml(wChars[j]) + '</span>';
+      wi++;
+    }
+    html += '</div></div>';
+  }
+  container.innerHTML = html;
+}
+
+function renderCell() {
+  var cell = document.querySelector('.char-cell .cell-char');
+  if (cell) cell.textContent = charSeq[charIdx] || '';
+  var wp = document.getElementById('writeProgress');
+  if (wp) wp.textContent = charSeq.length ? ('第 ' + (charIdx + 1) + ' / ' + charSeq.length + ' 字') : '';
+}
+
+// ===== 字义简笔画展示：优先 media/drawings/{字}.png，失败回退 emoji，再无则占位 =====
+var DRAWING_MAP = {
+  '日': '☀️', '月': '🌙', '山': '⛰️', '水': '💧', '火': '🔥',
+  '花': '🌸', '草': '🌿', '树': '🌳', '林': '🌳', '木': '🪵',
+  '雨': '🌧️', '云': '☁️', '风': '💨', '雪': '❄️', '雷': '⚡',
+  '天': '🌤️', '太': '☀️', '星': '⭐', '光': '💡', '金': '💰',
+  '心': '❤️', '手': '✋', '口': '👄', '眼': '👀', '耳': '👂',
+  '马': '🐎', '牛': '🐂', '羊': '🐑', '鸟': '🐦', '鱼': '🐟',
+  '虫': '🐛', '龙': '🐉', '虎': '🐯', '狗': '🐶', '猫': '🐱',
+  '车': '🚗', '门': '🚪', '书': '📖', '笔': '✏️', '纸': '📄',
+  '伞': '☂️', '衣': '👕', '帽': '🎩', '鞋': '👟', '田': '🌾',
+  '米': '🍚', '面': '🍜', '果': '🍎', '瓜': '🍉', '海': '🌊',
+  '河': '🏞️', '江': '🌊', '湖': '🏞️', '石': '🪨', '土': '🟫',
+  '玉': '💎', '刀': '🔪', '剑': '🗡️', '弓': '🏹', '箭': '🎯',
+  '头': '🙂', '足': '🦶', '大': '🐘', '小': '🐜', '高': '🏔️',
+  '上': '⬆️', '下': '⬇️', '中': '🎯', '来': '👋', '去': '➡️'
+};
+
+function renderDrawing(ch) {
+  var panel = document.getElementById('drawingPanel');
+  var img = document.getElementById('drawingImg');
+  var fb = document.getElementById('drawingFallback');
+  if (!panel || !img || !fb) return;
+  var src = '{% get_media_prefix %}drawings/' + encodeURIComponent(ch) + '.png';
+  // 先复位：显示图片、隐藏兜底层
+  img.style.display = '';
+  fb.className = 'drawing-fallback';
+  fb.textContent = '';
+  img.onerror = function() {
+    // 静态图不存在 → emoji 兜底 → 再占位
+    img.style.display = 'none';
+    var emoji = DRAWING_MAP[ch];
+    if (emoji) {
+      fb.className = 'drawing-fallback drawing-emoji';
+      fb.textContent = emoji;
+    } else {
+      fb.className = 'drawing-fallback drawing-fallback-text';
+      fb.innerHTML = escHtml(ch) + '<span class="drawing-hint">暂无配图</span>';
+    }
+  };
+  img.onload = function() {
+    // 静态图加载成功：确保图片显示、兜底层隐藏
+    img.style.display = '';
+    fb.className = 'drawing-fallback';
+    fb.textContent = '';
+  };
+  img.src = src;
+}
+
+// 根据全局汉字索引找到其所属词（word_analysis 条目）
+function wordForCharIndex(idx) {
+  var wa = (writingEx[writeIdx] && writingEx[writeIdx].word_analysis) || [];
+  var hi = 0;  // 汉字序列索引
+  for (var k = 0; k < wa.length; k++) {
+    var w = wa[k];
+    if (isPunctWord(w)) continue;
+    var wChars = Array.from(String(w.word || ''));
+    if (idx >= hi && idx < hi + wChars.length) return w;
+    hi += wChars.length;
+  }
+  return null;
+}
+
+// ===== 字级信息面板：发音/多音字、部首、繁体、结构、组词、笔画数、释义（cnchar）=====
+function getPinyins(ch) {
+  // cnchar.spell 多音字返回如 ["(Xíng|Háng|Hàng|Héng)"]，解析为去重读音数组（转小写）
+  try {
+    var arr = cnchar.spell(ch, 'array', 'tone', 'poly');
+    var out = [];
+    (arr || []).forEach(function(s) {
+      String(s).replace(/[()]/g, '').split('|').forEach(function(p) {
+        p = p.toLowerCase();
+        if (p && out.indexOf(p) === -1) out.push(p);
+      });
+    });
+    return out;
+  } catch (e) { return []; }
+}
+function getRadical(ch) {
+  // cnchar.radical 返回 [{radical:'戈', struct:'左右结构', radicalCount:4}]
+  try {
+    var r = cnchar.radical(ch);
+    if (Array.isArray(r) && r[0]) return r[0].radical || '';
+    if (r && r.radical) return r.radical;
+    return '';
+  } catch (e) { return ''; }
+}
+function getStructure(ch) {
+  try {
+    var r = cnchar.radical(ch);
+    if (Array.isArray(r) && r[0]) return r[0].struct || '';
+    if (r && r.struct) return r.struct;
+    return '';
+  } catch (e) { return ''; }
+}
+function getTrad(ch) {
+  try { return cnchar.convert ? cnchar.convert.simpleToTrad(ch) : ''; } catch (e) { return ''; }
+}
+function getStrokeCount(ch) {
+  try { return cnchar.stroke(ch); } catch (e) { return ''; }
+}
+function getWords(ch) {
+  try {
+    var w = cnchar.words(ch);
+    if (Array.isArray(w)) return w.slice(0, 4).join('、');
+    if (typeof w === 'string') return w.slice(0, 30);
+    return '';
+  } catch (e) { return ''; }
+}
+function getDict(ch) {
+  // 兜底释义：cnchar.explain 数据为词语级（单字通常查不到），
+  // 因此先同步返回所属词的中文词性 + 语法成分（简单解释其在句中的意义），确保始终有内容
+  var w = wordForCharIndex(charIdx);
+  var parts = [];
+  if (w) {
+    if (w.pos) parts.push(w.pos);
+    if (w.grammar) parts.push(w.grammar);
+  }
+  var fallback = parts.length ? parts.join('，') : '（暂无释义）';
+  // 优先：cnchar.explain 异步获取释义（返回 Promise），成功后覆盖渲染到释义行
+  try {
+    var p = cnchar.explain(ch);
+    if (p && typeof p.then === 'function') {
+      p.then(function(d) {
+        var txt = '';
+        if (Array.isArray(d) && d.length) txt = d.slice(0, 2).join('；');
+        else if (d && typeof d === 'object' && Object.keys(d).length) txt = JSON.stringify(d).slice(0, 30);
+        else if (d) txt = String(d).slice(0, 30);
+        if (txt) {
+          var el = document.getElementById('infoDict');
+          if (el) el.textContent = txt;
+        }
+      }).catch(function() {});
+    } else if (p && Array.isArray(p) && p.length) {
+      return p.slice(0, 2).join('；');
+    }
+  } catch (e) {}
+  return fallback;
+}
+function setText(id, v) {
+  var el = document.getElementById(id);
+  if (el) el.textContent = (v === '' || v === null || v === undefined) ? '－' : v;
+}
+// 发音：多音字各按钮播放 cnchar 语音资源（cnchar-data 预录音频 mp3，真人发音），精确指定读音。
+// 说明：不使用浏览器 SpeechSynthesis（音质差），也不走 Qwen3 TTS（该模型无拼音标注接口，会把拼音当文本误读）。
+// 转换逻辑（拼音→mp3 文件名）复用 pra_base 公共函数 cncharPinyinToMp3Name
+function playPron(p) {
+  if (!p) return;
+  var url = 'https://unpkg.com/cnchar-data@latest/voice/' + cncharPinyinToMp3Name(p.toLowerCase()) + '.mp3';
+  var audio = new Audio(url);
+  audio.play().catch(function() {});
+}
+
+function renderInfo(ch) {
+  var panel = document.getElementById('infoPanel');
+  if (!panel) return;
+  if (typeof cnchar === 'undefined') {
+    panel.innerHTML = '<div class="info-char">' + escHtml(ch) + '</div>';
+    return;
+  }
+  // 行1：发音按钮 + 拼音（多音字每读音一个按钮）
+  var ps = getPinyins(ch);
+  var row = document.getElementById('infoRowPron');
+  if (row) {
+    row.innerHTML = ps.length
+      ? ps.map(function(p) { return '<button class="pron-btn" onclick="playPron(\'' + p + '\')"><i class="fas fa-volume-up"></i>' + p + '</button>'; }).join('')
+      : '<span class="info-char">' + escHtml(ch) + '</span>';
+  }
+  // 行2-4：部首/繁体、结构/组词、笔画/释义
+  setText('infoRadical', getRadical(ch));
+  setText('infoTrad', getTrad(ch));
+  setText('infoStruct', getStructure(ch));
+  setText('infoWords', getWords(ch));
+  setText('infoStroke', getStrokeCount(ch));
+  setText('infoDict', getDict(ch));
+}
+
+// 只更新词列当前字高亮（切字时避免重建整个词列 DOM）
+function updateCharHighlight() {
+  document.querySelectorAll('.writing-words .wc-char').forEach(function(el) {
+    var idx = parseInt(el.dataset.idx, 10);
+    el.classList.toggle('cur-char', idx === charIdx);
+  });
+}
+
+// ---- 笔顺演示 / 描摹校验 状态机 ----
+
+// 逐字校验：汉字完成状态缓存（localStorage 持久化，键按句子索引）
+function loadDone() {
+  charDone = [];
+  try {
+    var all = JSON.parse(sessionStorage.getItem(DONE_KEY) || '{}');
+    var arr = all[writeIdx];
+    if (Array.isArray(arr)) charDone = arr.slice(0, charSeq.length);
+  } catch (e) {}
+  while (charDone.length < charSeq.length) charDone.push(false);
+}
+function saveDone() {
+  try {
+    var all = JSON.parse(sessionStorage.getItem(DONE_KEY) || '{}');
+    all[writeIdx] = charDone.slice();
+    sessionStorage.setItem(DONE_KEY, JSON.stringify(all));
+  } catch (e) {}
+}
+function clearDone() {
+  try {
+    var all = JSON.parse(sessionStorage.getItem(DONE_KEY) || '{}');
+    delete all[writeIdx];
+    sessionStorage.setItem(DONE_KEY, JSON.stringify(all));
+  } catch (e) {}
+}
+// 离开页面（切换模式/返回课时列表/切换课时/关闭浏览器/刷新）时清除书写状态缓存，
+// 确保下次进入练习时所有字均为未书写状态
+window.addEventListener('pagehide', function() {
+  try { sessionStorage.removeItem(DONE_KEY); } catch (e) {}
+});
+// 从 from 之后找下一个未完成字；全部完成返回 -1
+function nextUndone(from) {
+  var n = charSeq.length;
+  for (var k = from + 1; k < n; k++) if (!charDone[k]) return k;
+  for (var k2 = 0; k2 <= from; k2++) if (!charDone[k2]) return k2;
+  return -1;
+}
+function showRewriteBtn(show) {
+  var btn = document.getElementById('rewriteBtn');
+  if (btn) btn.classList.toggle('show', !!show);
+}
+
+function clearStroke() {
+  if (strokeTimer) { clearTimeout(strokeTimer); strokeTimer = null; }
+  stopScratch();  // 停止笔尖沙沙声
+  writingLocked = false;
+  strokePhase = 'idle';
+  var cell = document.querySelector('.char-cell');
+  if (cell) cell.classList.remove('ok', 'err', 'hw-mode');
+  applyGridStyle();  // 重置后恢复米字格颜色网格
+  var grid = document.querySelector('.writing-grid');
+  if (grid) grid.classList.remove('write-mode');
+  if (strokeWriter) { try { strokeWriter.cancelQuiz(); } catch (e) {} strokeWriter = null; }
+  var mount = document.getElementById('charStroke');
+  if (mount) mount.innerHTML = '';
+  showRewriteBtn(false);
+}
+
+function onStrokeDataMissing(ch) {
+  clearStroke();
+  renderCell();
+  toast('「' + ch + '」暂无笔顺数据，可点击其它字或下一题跳过');
+}
+
+function startQuiz() {
+  var grid = document.querySelector('.writing-grid');
+  if (grid) grid.classList.add('write-mode');
+  strokeWriter.quiz({
+    showHintAfterMisses: false,
+    highlightOnComplete: true,
+    onMistake: onStrokeMistake,
+    onComplete: onCharCorrect
+  });
+}
+
+// 笔顺错误：线框+字变红 + 错误音 → 停顿后重置灰色，允许重描
+function onStrokeMistake() {
+  if (writingLocked) return;
+  writingLocked = true;
+  var cell = document.querySelector('.char-cell');
+  if (cell) cell.classList.add('err');
+  applyGridStyle();  // 网格随校验状态变红
+  try { strokeWriter.updateColor('#e74c3c'); } catch (e) {}
+  playSfx('err');
+  try { strokeWriter.cancelQuiz(); } catch (e) {}
+  strokeTimer = setTimeout(function() {
+    writingLocked = false;
+    if (cell) cell.classList.remove('err');
+    applyGridStyle();  // 恢复米字格颜色网格
+    if (strokePhase === 'write') startQuiz();
+  }, 800);
+}
+
+// 笔顺全部正确：标记该字已完成（缓存）→ 绿框+绿字+正确音 → 停顿后切到下一个未完成字；
+// 若整句所有汉字均已写正确，判定整句完成
+function onCharCorrect() {
+  if (writingLocked) return;
+  writingLocked = true;
+  charDone[charIdx] = true;
+  saveDone();
+  var cell = document.querySelector('.char-cell');
+  if (cell) cell.classList.add('ok');
+  applyGridStyle();  // 网格随校验状态变绿
+  showRewriteBtn(true);
+  playSfx('ok');
+  strokeTimer = setTimeout(function() {
+    writingLocked = false;
+    var next = nextUndone(charIdx);
+    if (next === -1) {
+      onSentenceComplete();
+    } else {
+      selectChar(next);
+    }
+  }, 1000);
+}
+
+// 整句完成：完成弹窗 + 正确音 → 停顿后自动进入下一句
+function onSentenceComplete() {
+  playSfx('ok');
+  Swal.fire({
+    title: '🎉 整句完成！',
+    html: '<div style="font-size:15px;color:#555;">已按笔顺写完「' + escHtml(charSeq.join('')) + '」</div>',
+    icon: 'success',
+    showConfirmButton: false,
+    timer: 1200,
+    timerProgressBar: true
+  });
+  strokeTimer = setTimeout(function() {
+    if (writeIdx < writingEx.length - 1) {
+      writeIdx++;
+      charIdx = 0;
+      render();
+    } else {
+      Swal.fire({icon: 'success', title: '全部完成！', text: '所有句子都已练习完毕', confirmButtonColor: '#20c997'});
+    }
+  }, 1200);
+}
+
+// 选中汉字：重置 → 渲染词列/米字格 → HanziWriter 加载字形 → 自动笔顺演示 → 进入描摹
+function selectChar(i) {
+  if (!charSeq.length) return;
+  var prevIdx = charIdx;
+  if (i < 0) i = 0;
+  if (i >= charSeq.length) i = charSeq.length - 1;
+  charIdx = i;
+  if (i !== prevIdx) playSfx('place');  // 切到新字播放 place 音效（重写同字不播）
+  clearStroke();
+  renderWords(writingEx[writeIdx]);
+  renderCell();
+  renderDrawing(charSeq[charIdx]);  // 更新左侧字义简笔画
+  renderInfo(charSeq[charIdx]);     // 更新右侧信息面板
+  if (!window.HanziWriter) { toast('笔顺组件未加载'); return; }
+  var ch = charSeq[charIdx];
+  if (!ch) return;
+  var mount = document.getElementById('charStroke');
+  var cell = document.querySelector('.char-cell');
+
+  if (charDone[charIdx]) {
+    // 已书写正确的汉字：绿色显示 + 「重写」按钮，不演示不描摹
+    strokeWriter = HanziWriter.create(mount, ch, {
+      width: 170, height: 170, padding: 6,
+      showOutline: true, showCharacter: true,
+      outlineColor: '#999',
+      strokeColor: '#22c55e',     // 已完成字显示绿色
+      strokeAnimationSpeed: strokeCfg.speed, // 行笔速度（值越小越慢）
+      delayBetweenStrokes: strokeCfg.delay,  // 笔画间停顿（ms）
+      onLoadCharDataSuccess: function() {
+        if (cell) cell.classList.add('hw-mode');
+        try { strokeWriter.updateColor('#22c55e'); } catch (e) {}
+      },
+      onLoadCharDataError: function() { onStrokeDataMissing(ch); }
+    });
+    if (cell) cell.classList.add('ok');
+    showRewriteBtn(true);
+    return;
+  }
+
+  // 未书写（或待重写）的汉字：灰字红格 → 自动演示笔顺 → 进入描摹
+  strokeWriter = HanziWriter.create(mount, ch, {
+    width: 170, height: 170, padding: 6,
+    showOutline: true, showCharacter: true,
+    outlineColor: '#999',      // 参考轮廓灰色
+    strokeColor: strokeCfg.strokeColor,   // 演示笔顺颜色（可调）
+    drawingColor: strokeCfg.drawingColor, // 用户描摹轨迹颜色（可调）
+    drawingWidth: strokeCfg.drawingWidth, // 描摹笔触粗细（可调）
+    leniency: strokeCfg.precision,  // 描摹识别宽容度（值越大越容易通过，默认 1）
+    averageDistanceThreshold: 350,  // 平均距离阈值（固定默认）
+    highlightColor: '#22c55e', // 完成高亮绿色
+    strokeAnimationSpeed: strokeCfg.speed, // 行笔速度（值越小越慢）
+    delayBetweenStrokes: strokeCfg.delay,  // 笔画间停顿（ms）
+    onLoadCharDataSuccess: function() {
+      // 字形数据加载成功：隐藏楷体文本层，由 HanziWriter SVG 显示灰色字（与描摹完全重合）
+      if (cell) cell.classList.add('hw-mode');
+      // 若关闭「演示笔顺」，数据就绪后直接进入描摹
+      if (strokePhase === 'write') startQuiz();
+    },
+    onLoadCharDataError: function() { onStrokeDataMissing(ch); }
+  });
+  showRewriteBtn(false);
+  if (strokeCfg.strokeDemo) {
+    strokePhase = 'demo';
+    strokeWriter.animateCharacter({ onComplete: function() {
+      if (strokePhase !== 'demo') return;
+      strokePhase = 'write';
+      startQuiz();
+    }});
+  } else {
+    // 关闭「演示笔顺」：切字后直接书写（由 onLoadCharDataSuccess 在数据就绪时进入描摹）
+    strokePhase = 'write';
+  }
+}
+
+function setChar(i) {
+  if (!charSeq.length) return;
+  if (i < 0) i = 0;
+  if (i >= charSeq.length) i = charSeq.length - 1;
+  // 不在此处改 charIdx：由 selectChar 内部设置，并据此判断是否播放 place 音效（切到新字）
+  selectChar(i);
+}
+
+function speakCharsSequentially(chars, idx) {
+  if (!chars || idx >= chars.length) return;
+  // 逐字发音：cnchar 库驱动（真人预录音频 mp3），替代 Qwen3 TTS
+  playCncharWord(chars[idx], function() {
+    setTimeout(function() { speakCharsSequentially(chars, idx + 1); }, 400);
+  });
+}
+
+function listeningControl(action) {
+  if (action === 'prev') {
+    if (writeIdx > 0) { writeIdx--; charIdx = 0; render(); }
+  } else if (action === 'next') {
+    if (writeIdx < writingEx.length - 1) { writeIdx++; charIdx = 0; render(); }
+    else { Swal.fire({icon: 'info', title: '已完成所有题目', confirmButtonColor: '#20c997'}); }
+  } else if (action === 'play') {
+    var q = writingEx[writeIdx];
+    if (q && q.chinese) {
+      VoicePlayer.startSpectrum('spectrumCanvas');
+      VoicePlayer.speak(q.chinese);
+    }
+  } else if (action === 'word') {
+    if (charSeq.length) speakCharsSequentially(charSeq.slice(), 0);
+  } else if (action === 'mastered') {
+    toast('已掌握');
+  } else if (action === 'unfamiliar') {
+    toast('不熟悉');
+  }
+}
+
+function toast(msg) {
+  if (msg === '重置进度') {
+    writeIdx = 0; charIdx = 0;
+    clearDone();
+    render();
+    Swal.fire({title: '✅ 已重置', text: '已跳转到第一句', timer: 1200, showConfirmButton: false, icon: 'success'});
+    return;
+  }
+  Swal.fire({title: msg, timer: 800, showConfirmButton: false, icon: 'info'});
+}
+
+function showContentList() {
+  var all = EXERCISES_BY_MODE['writing'] || [];
+  if (!all.length) {
+    Swal.fire({icon: 'info', title: '暂无内容', text: '当前模式还没有练习题', confirmButtonColor: '#20c997'});
+    return;
+  }
+  var html = '<div class="content-list">';
+  all.forEach(function(ex, i) {
+    html += '<div class="content-item" onclick="var s=Swal;s.close();writeIdx=' + i + ';charIdx=0;render();" style="cursor:pointer;padding:12px 16px;border-bottom:1px solid #f5f5f5;display:flex;gap:12px;align-items:flex-start;">';
+    html += '<div style="width:28px;height:28px;border-radius:50%;background:#20c997;color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;">' + (i + 1) + '</div>';
+    html += '<div style="flex:1;"><div style="font-size:17px;font-weight:600;color:#1a1a1a;">' + (ex.chinese || '') + '</div><div style="font-size:13px;color:#999;margin-top:1px;">' + (ex.english || '') + '</div></div>';
+    html += '</div>';
+  });
+  html += '</div>';
+  Swal.fire({title: '本课时句子列表', html: html, showConfirmButton: true, confirmButtonText: '关闭', confirmButtonColor: '#20c997', width: 500, padding: '0 0 16px'});
+}
+
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(function(){});
+  } else {
+    document.exitFullscreen().catch(function(){});
+  }
+}
+
+function applyStrokeSettings(force) {
+  // 调节生效：默认描摹中不打断（下次切字生效）；force=true 时强制应用当前字立即生效（如识别精度）
+  if (strokeWriter && (force || strokePhase !== 'write')) {
+    selectChar(charIdx);
+  }
+}
+
+function showStrokeSettings() {
+  Swal.fire({
+    title: '书写设置',
+    html:
+      '<div style="text-align:left;font-size:14px;color:#555;line-height:1.9;padding:0 4px;max-height:60vh;overflow-y:auto;">' +
+        '<div style="margin-bottom:18px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
+            '<strong style="color:#2563eb;">演示笔顺</strong>' +
+            '<label style="position:relative;display:inline-block;width:40px;height:22px;flex-shrink:0;cursor:pointer;">' +
+              '<input type="checkbox" id="demoCfgSwitch"' + (strokeCfg.strokeDemo ? ' checked' : '') + ' style="display:none;">' +
+              '<span id="demoCfgTrack" style="position:absolute;inset:0;background:' + (strokeCfg.strokeDemo ? '#20c997' : '#ddd') + ';border-radius:11px;transition:background .2s;"></span>' +
+              '<span id="demoCfgKnob" style="position:absolute;top:2px;left:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform .2s;pointer-events:none;' + (strokeCfg.strokeDemo ? 'transform:translateX(18px);' : '') + '"></span>' +
+            '</label>' +
+          '</div>' +
+          '<div style="font-size:12px;color:#999;">开启后切字自动演示笔顺动画；关闭则直接书写</div>' +
+        '</div>' +
+        '<div style="margin-bottom:18px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
+            '<strong style="color:#2563eb;">演示笔顺颜色</strong>' +
+            '<input type="color" id="scInput" value="' + strokeCfg.strokeColor + '" style="width:44px;height:26px;border:none;padding:0;background:none;cursor:pointer;">' +
+          '</div>' +
+          '<div style="font-size:12px;color:#999;">选择笔顺演示动画的颜色（当前 ' + strokeCfg.strokeColor + '）</div>' +
+        '</div>' +
+        '<div style="margin-bottom:18px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
+            '<strong style="color:#e74c3c;">笔触颜色</strong>' +
+            '<input type="color" id="wcInput" value="' + strokeCfg.drawingColor + '" style="width:44px;height:26px;border:none;padding:0;background:none;cursor:pointer;">' +
+          '</div>' +
+          '<div style="font-size:12px;color:#999;">选择描摹轨迹的颜色（当前 ' + strokeCfg.drawingColor + '）</div>' +
+        '</div>' +
+        '<div style="margin-bottom:18px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
+            '<strong style="color:#e74c3c;">米字格颜色</strong>' +
+            '<input type="color" id="ccInput" value="' + strokeCfg.cellColor + '" style="width:44px;height:26px;border:none;padding:0;background:none;cursor:pointer;">' +
+          '</div>' +
+          '<div style="font-size:12px;color:#999;">选择米字格线框与网格线的颜色（当前 ' + strokeCfg.cellColor + '）</div>' +
+        '</div>' +
+        '<div style="margin-bottom:18px;">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+            '<strong style="color:#2563eb;">网格样式</strong>' +
+            '<select id="gridStyleSel" style="padding:4px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;color:#555;background:#fff;cursor:pointer;">' +
+              '<option value="0"' + (strokeCfg.gridStyle === 0 ? ' selected' : '') + '>田字格（内实线）</option>' +
+              '<option value="1"' + (strokeCfg.gridStyle === 1 ? ' selected' : '') + '>田字格（内虚线）</option>' +
+              '<option value="2"' + (strokeCfg.gridStyle === 2 ? ' selected' : '') + '>米字格（内实线）</option>' +
+              '<option value="3"' + (strokeCfg.gridStyle === 3 ? ' selected' : '') + '>米字格（内虚线）</option>' +
+              '<option value="4"' + (strokeCfg.gridStyle === 4 ? ' selected' : '') + '>方格</option>' +
+            '</select>' +
+          '</div>' +
+          '<div style="font-size:12px;color:#999;">选择米字格内部网格的外观</div>' +
+        '</div>' +
+        '<div style="margin-bottom:18px;">' +
+          '<div style="display:flex;justify-content:space-between;margin-bottom:4px;">' +
+            '<strong style="color:#2563eb;">行笔速度</strong>' +
+            '<span id="spdVal" style="color:#20c997;font-weight:600;">' + strokeCfg.speed.toFixed(1) + '</span>' +
+          '</div>' +
+          '<div style="font-size:12px;color:#999;margin-bottom:6px;">控制每一笔画的动画行笔速度，数值越小越慢（当前 ' + strokeCfg.speed.toFixed(1) + '，默认 1）</div>' +
+          '<input type="range" id="spdSlider" min="0.2" max="3" step="0.1" value="' + strokeCfg.speed + '" style="width:100%;accent-color:#20c997;">' +
+        '</div>' +
+        '<div style="margin-bottom:18px;">' +
+          '<div style="display:flex;justify-content:space-between;margin-bottom:4px;">' +
+            '<strong style="color:#f57c00;">笔画间停顿</strong>' +
+            '<span id="dlyVal" style="color:#20c997;font-weight:600;">' + strokeCfg.delay + 'ms</span>' +
+          '</div>' +
+          '<div style="font-size:12px;color:#999;margin-bottom:6px;">控制各笔画之间的停顿时长（当前 ' + strokeCfg.delay + 'ms，默认 1000ms）</div>' +
+          '<input type="range" id="dlySlider" min="0" max="2000" step="50" value="' + strokeCfg.delay + '" style="width:100%;accent-color:#20c997;">' +
+        '</div>' +
+        '<div style="margin-bottom:18px;">' +
+          '<div style="display:flex;justify-content:space-between;margin-bottom:4px;">' +
+            '<strong style="color:#e74c3c;">笔触粗细</strong>' +
+            '<span id="wdVal" style="color:#20c997;font-weight:600;">' + strokeCfg.drawingWidth + 'px</span>' +
+          '</div>' +
+          '<div style="font-size:12px;color:#999;margin-bottom:6px;">控制描摹轨迹的粗细（当前 ' + strokeCfg.drawingWidth + 'px，默认 4px）</div>' +
+          '<input type="range" id="wdSlider" min="4" max="30" step="1" value="' + strokeCfg.drawingWidth + '" style="width:100%;accent-color:#20c997;">' +
+        '</div>' +
+        '<div style="margin-bottom:18px;">' +
+          '<div style="display:flex;justify-content:space-between;margin-bottom:4px;">' +
+            '<strong style="color:#2563eb;">识别精度</strong>' +
+            '<span id="prVal" style="color:#20c997;font-weight:600;">' + strokeCfg.precision.toFixed(1) + '</span>' +
+          '</div>' +
+          '<div style="font-size:12px;color:#999;margin-bottom:6px;">描摹识别宽容度，数值越大越容易通过（细微笔画更易识别）；越小越严格（当前 ' + strokeCfg.precision.toFixed(1) + '，默认 1）</div>' +
+          '<input type="range" id="prSlider" min="0.5" max="3" step="0.1" value="' + strokeCfg.precision + '" style="width:100%;accent-color:#20c997;">' +
+        '</div>' +
+        '<div>' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+            '<strong style="color:#2563eb;">书写音效</strong>' +
+            '<select id="scratchSel" style="padding:4px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;color:#555;background:#fff;cursor:pointer;">' +
+              '<option value="none"' + (strokeCfg.scratchKey === 'none' ? ' selected' : '') + '>关闭</option>' +
+              '<option value="1"' + (strokeCfg.scratchKey === '1' ? ' selected' : '') + '>百灵鸟</option>' +
+              '<option value="2"' + (strokeCfg.scratchKey === '2' ? ' selected' : '') + '>清亮啁啾</option>' +
+              '<option value="3"' + (strokeCfg.scratchKey === '3' ? ' selected' : '') + '>悠扬</option>' +
+              '<option value="4"' + (strokeCfg.scratchKey === '4' ? ' selected' : '') + '>轻快雀鸣</option>' +
+            '</select>' +
+          '</div>' +
+          '<div style="font-size:12px;color:#999;">选择描摹书写时的音效，可选择关闭</div>' +
+        '</div>' +
+      '</div>',
+    showConfirmButton: true,
+    confirmButtonText: '完成',
+    confirmButtonColor: '#20c997',
+    width: 480,
+    didOpen: function() {
+      var spd = document.getElementById('spdSlider');
+      var dly = document.getElementById('dlySlider');
+      var wd = document.getElementById('wdSlider');
+      var wc = document.getElementById('wcInput');
+      var demoS = document.getElementById('demoCfgSwitch');
+      var sc = document.getElementById('scInput');
+      var cc = document.getElementById('ccInput');
+      var pr = document.getElementById('prSlider');
+      spd.addEventListener('input', function() {
+        strokeCfg.speed = parseFloat(spd.value);
+        saveStrokeCfg();
+        document.getElementById('spdVal').textContent = strokeCfg.speed.toFixed(1);
+      });
+      dly.addEventListener('input', function() {
+        strokeCfg.delay = parseInt(dly.value, 10);
+        saveStrokeCfg();
+        document.getElementById('dlyVal').textContent = strokeCfg.delay + 'ms';
+      });
+      wd.addEventListener('input', function() {
+        strokeCfg.drawingWidth = parseInt(wd.value, 10);
+        saveStrokeCfg();
+        document.getElementById('wdVal').textContent = strokeCfg.drawingWidth + 'px';
+      });
+      wc.addEventListener('input', function() {
+        strokeCfg.drawingColor = wc.value;
+        saveStrokeCfg();
+      });
+      demoS.addEventListener('change', function() {
+        strokeCfg.strokeDemo = demoS.checked;
+        saveStrokeCfg();
+        document.getElementById('demoCfgTrack').style.background = demoS.checked ? '#20c997' : '#ddd';
+        document.getElementById('demoCfgKnob').style.transform = demoS.checked ? 'translateX(18px)' : '';
+        applyStrokeSettings();
+      });
+      sc.addEventListener('input', function() {
+        strokeCfg.strokeColor = sc.value;
+        saveStrokeCfg();
+      });
+      cc.addEventListener('input', function() {
+        strokeCfg.cellColor = cc.value;
+        saveStrokeCfg();
+        applyCellColor();
+      });
+      // 网格样式下拉
+      var gsel = document.getElementById('gridStyleSel');
+      if (gsel) gsel.addEventListener('change', function() {
+        strokeCfg.gridStyle = parseInt(gsel.value, 10);
+        saveStrokeCfg();
+        applyGridStyle();
+      });
+      pr.addEventListener('input', function() {
+        strokeCfg.precision = parseFloat(pr.value);
+        saveStrokeCfg();
+        document.getElementById('prVal').textContent = strokeCfg.precision.toFixed(1);
+      });
+      pr.addEventListener('change', function() {
+        applyStrokeSettings(true);  // 识别精度修改强制重建当前字，立即生效
+      });
+      // 书写音效下拉
+      var scSel = document.getElementById('scratchSel');
+      if (scSel) scSel.addEventListener('change', function() {
+        strokeCfg.scratchKey = scSel.value;
+        saveStrokeCfg();
+      });
+      // 松手后重建当前字，立即应用（描摹中不打断）
+      spd.addEventListener('change', applyStrokeSettings);
+      dly.addEventListener('change', applyStrokeSettings);
+      wd.addEventListener('change', applyStrokeSettings);
+      wc.addEventListener('change', applyStrokeSettings);
+      sc.addEventListener('change', applyStrokeSettings);
+    }
+  });
+}
+
+function showWritingHelp() {
+  Swal.fire({
+    title: '本模式使用说明',
+    html: '<div style="text-align:left;font-size:14px;color:#555;line-height:1.9;">' +
+      '<p style="font-weight:600;color:#2563eb;margin-bottom:10px;">✍️ 笔顺演示与描摹</p>' +
+      '<div style="padding-left:6px;">' +
+      '<div style="margin-bottom:8px;"><strong>自动演示</strong> — 切到未书写汉字后自动播放笔顺动画；「书写设置」中可关闭演示或自定义演示颜色</div>' +
+      '<div style="margin-bottom:8px;"><strong>描摹书写</strong> — 演示结束光标变为笔形，用鼠标或触摸笔在米字格内按笔顺描摹，轨迹以红色实时显示</div>' +
+      '<div style="margin-bottom:8px;"><strong>笔顺校验</strong> — 按正确顺序写完线框变绿并自动进入下一字；笔顺错误线框变红并允许重描</div>' +
+      '</div>' +
+      '<p style="font-weight:600;color:#f57c00;margin:14px 0 10px;">✅ 逐字进度与重写</p>' +
+      '<div style="padding-left:6px;">' +
+      '<div style="margin-bottom:8px;"><strong>绿色高亮</strong> — 书写正确的汉字变绿并记忆进度，词列同步变绿</div>' +
+      '<div style="margin-bottom:8px;"><strong>重写按钮</strong> — 回切到已写正确的字时显示「重写」，点击可将该字重置为未书写重新练习</div>' +
+      '<div style="margin-bottom:8px;"><strong>整句完成</strong> — 句中每个字都写对一次后弹窗提示，并自动进入下一句</div>' +
+      '</div>' +
+      '<p style="font-weight:600;color:#888;margin:14px 0 10px;">⚠️ 数据缺失兜底</p>' +
+      '<div style="padding-left:6px;"><div style="margin-bottom:8px;">个别汉字若无笔顺数据，会以灰色文本显示并提示，可点击其它字或下一题跳过，不影响其它字练习</div></div>' +
+      '<p style="font-weight:600;color:#888;margin:14px 0 10px;">🎛 其它控制</p>' +
+      '<div style="padding-left:6px;">' +
+      '<div style="margin-bottom:8px;"><strong>书写设置</strong> — 右上角「书写设置」可调节演示开关/演示颜色、行笔速度、笔画间停顿与描摹笔触，实时生效并自动记忆</div>' +
+      '<div style="margin-bottom:8px;"><strong>显示开关</strong> — 顶部开关控制图片、拼音、笔顺演示的显示与隐藏</div>' +
+      '<div style="margin-bottom:8px;"><strong>逐字切换</strong> — 点击句中的汉字可切换当前练习的字</div>' +
+      '</div>' +
+      '</div>',
+    confirmButtonText: '知道了',
+    confirmButtonColor: '#20c997',
+    width: 480
+  });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  writingEx = EXERCISES_BY_MODE['writing'] || [];
+  if (!writingEx.length) return;
+
+  function applyToggle(cls, show) {
+    document.querySelectorAll('.' + cls).forEach(function(el) { el.classList.toggle('hidden', !show); });
+  }
+  function initToggle(id, cls) {
+    var cb = document.getElementById(id);
+    var saved = localStorage.getItem('writing_' + id);
+    if (saved === '0') { cb.checked = false; applyToggle(cls, false); }
+    cb.addEventListener('change', function() {
+      var on = cb.checked;
+      localStorage.setItem('writing_' + id, on ? '1' : '0');
+      applyToggle(cls, on);
+    });
+  }
+  initToggle('toggleImage', 'sentence-image');
+  initToggle('togglePinyin', 'ww-pinyin');
+
+  document.getElementById('writingWords').addEventListener('click', function(e) {
+    var span = e.target.closest('.wc-char');
+    if (span) setChar(parseInt(span.dataset.idx, 10));
+  });
+  // 「重写」：将当前已正确汉字重置为未书写（灰字红格），缓存同步更新，重新演示
+  document.getElementById('rewriteBtn').addEventListener('click', function() {
+    charDone[charIdx] = false;
+    saveDone();
+    playSfx('undo');  // 重写播放 undo 音效（与 place 成对）
+    selectChar(charIdx);
+  });
+  // 用户描摹时播放笔尖沙沙声（按下开始、松开/移出/取消停止）
+  var strokeMount = document.getElementById('charStroke');
+  if (strokeMount) {
+    strokeMount.addEventListener('pointerdown', playScratch);
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(function(ev) {
+      strokeMount.addEventListener(ev, stopScratch);
+    });
+  }
+  // 演示/描摹期间禁用键盘切字，避免打断；空闲时允许 ←/→/空格 切换
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === ' ') {
+      e.preventDefault();
+      if (strokePhase !== 'idle') return;
+      if (e.key === 'ArrowLeft') setChar(charIdx - 1);
+      else setChar(charIdx + 1);
+    }
+  });
+
+  // 预加载全部音效（页面加载即执行，保证首次手动切字/重写即有音效）
+  function loadAllSfx() {
+    loadSnd('ok', '{% static "sound/complete.wav" %}');
+    loadSnd('err', '{% static "sound/error.wav" %}');
+    loadSnd('place', '{% static "sound/drop-place.wav" %}');   // 切字音效
+    loadSnd('undo', '{% static "sound/drop-undo.wav" %}');     // 重写音效
+    // 书写音效（鸟鸣，可下拉选择；'none' 关闭）
+    loadSnd('scratch1', '{% static "sound/pen-scratch-1.wav" %}');
+    loadSnd('scratch2', '{% static "sound/pen-scratch-2.wav" %}');
+    loadSnd('scratch3', '{% static "sound/pen-scratch-3.wav" %}');
+    loadSnd('scratch4', '{% static "sound/pen-scratch-4.wav" %}');
+  }
+  loadAllSfx();
+  // 首次用户手势：解锁音频上下文（播放需用户手势）并兜底重载
+  function primeSfx() { getSndCtx(); loadAllSfx(); }
+  document.addEventListener('pointerdown', primeSfx, {once: true});
+  document.addEventListener('keydown', primeSfx, {once: true});
+
+  applyCellColor();  // 应用持久化的米字格颜色
+  applyGridStyle();  // 应用持久化的网格样式
+  render();
+  startNewSession('writing');
+});
+</script>
+{% endblock %}

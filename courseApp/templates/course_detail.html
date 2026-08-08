@@ -1,0 +1,396 @@
+{% extends 'main-base.html' %}
+{% load static %}
+
+{% block title %}{{ course.name }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'plugins/sweetalert/sweetalert2.min.css' %}">
+<style>
+/* ========== 练习模式选择弹窗 ========== */
+.practice-modal-container {
+    padding: 0;
+    user-select: none;
+}
+
+/* 轮播容器 */
+.mode-carousel {
+    position: relative;
+    overflow: hidden;
+    border-radius: 16px;
+}
+
+.mode-track {
+    display: flex;
+    transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.mode-slide {
+    min-width: 100%;
+    text-align: center;
+    padding: 30px 20px 20px;
+}
+
+.mode-icon {
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 18px;
+    border-radius: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 48px;
+    color: #fff;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+}
+
+.mode-icon.typing { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+.mode-icon.speaking { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+.mode-icon.translate { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+.mode-icon.listening { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+.mode-icon.sorting { background: linear-gradient(135deg, #ff9966 0%, #ff5e62 100%); }
+.mode-icon.writing { background: linear-gradient(135deg, #2c3e50 0%, #000000 100%); }
+
+.mode-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-bottom: 8px;
+}
+
+.mode-desc {
+    font-size: 14px;
+    color: #999;
+    line-height: 1.5;
+    margin-bottom: 20px;
+    padding: 0 10px;
+}
+
+.mode-start-btn {
+    display: inline-block;
+    padding: 10px 40px;
+    border-radius: 25px;
+    border: none;
+    font-size: 15px;
+    font-weight: 600;
+    color: #fff;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.mode-start-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+}
+
+.mode-start-btn.typing { background: linear-gradient(135deg, #667eea, #764ba2); }
+.mode-start-btn.speaking { background: linear-gradient(135deg, #f093fb, #f5576c); }
+.mode-start-btn.translate { background: linear-gradient(135deg, #4facfe, #00f2fe); }
+.mode-start-btn.listening { background: linear-gradient(135deg, #43e97b, #38f9d7); }
+.mode-start-btn.sorting { background: linear-gradient(135deg, #ff9966, #ff5e62); }
+.mode-start-btn.writing { background: linear-gradient(135deg, #2c3e50, #000000); }
+
+/* 轮播指示器 */
+.carousel-dots {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    padding-top: 6px;
+    padding-bottom: 4px;
+}
+
+.carousel-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ddd;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    padding: 0;
+}
+
+.carousel-dot.active {
+    background: #20c997;
+    width: 24px;
+    border-radius: 4px;
+}
+
+/* 左右箭头 */
+.carousel-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.9);
+    border: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    color: #666;
+    z-index: 2;
+    transition: all 0.2s;
+}
+
+.carousel-arrow:hover {
+    background: #fff;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    color: #20c997;
+}
+
+.carousel-arrow.prev { left: 6px; }
+.carousel-arrow.next { right: 6px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="course-detail">
+  <!-- 课程头部 -->
+  <div class="detail-header">
+    <div class="header-cover">
+      {% if course.cover_image %}
+      <img src="{{ course.cover_image.url }}" alt="{{ course.name }}">
+      {% else %}
+      <img src="{% static 'img/default-course.png' %}" alt="{{ course.name }}">
+      {% endif %}
+    </div>
+    <div class="header-info">
+      <h1 class="course-name">{{ course.name }}</h1>
+      {% if course.subtitle %}
+      <p class="course-subtitle">{{ course.subtitle }}</p>
+      {% endif %}
+      {% if course.description %}
+      <p class="course-desc">{{ course.description }}</p>
+      {% endif %}
+      <div class="header-meta">
+        <div class="meta-item">
+          <i class="fas fa-chalkboard-teacher"></i>
+          <span>{% if course.teacher %}{{ course.teacher.nickname|default:course.teacher.username }}{% else %}平台名师{% endif %}</span>
+        </div>
+        <div class="meta-item">
+          <i class="fas fa-layer-group"></i>
+          <span>{{ chapters|length }} 个章节</span>
+        </div>
+        <div class="meta-item">
+          <i class="fas fa-file-alt"></i>
+          <span>{{ total_lessons }} 个课时</span>
+        </div>
+        <div class="meta-item">
+          <i class="fas fa-fire"></i>
+          <span>{{ course.heat }} 人学习</span>
+        </div>
+      </div>
+      <div class="header-tags">
+        {% if course.is_free %}
+        <span class="tag tag-free">免费</span>
+        {% else %}
+        <span class="tag tag-price">¥{{ course.price }}</span>
+        {% endif %}
+        <span class="tag tag-level">{{ course.get_difficulty_display }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 章节列表 -->
+  <div class="chapter-section">
+    <h2 class="section-title">课程目录</h2>
+    {% for chapter in chapters %}
+    <div class="chapter-card">
+      <div class="chapter-header">
+        <div class="chapter-index">第{{ forloop.counter }}章</div>
+        <div class="chapter-name">{{ chapter.name }}</div>
+        <div class="chapter-count">{{ chapter.lessons.count }} 课时</div>
+      </div>
+      {% if chapter.description %}
+      <div class="chapter-desc">{{ chapter.description }}</div>
+      {% endif %}
+      <div class="lesson-list">
+        {% for lesson in chapter.lessons.all %}
+        <div class="lesson-item" onclick="showPracticeModal('{{ lesson.name|escapejs }}', {{ lesson.id }})">
+          <div class="lesson-info">
+            <span class="lesson-index">{{ forloop.counter }}</span>
+            <span class="lesson-name">{{ lesson.name }}</span>
+          </div>
+          <div class="lesson-meta">
+            {% if lesson.is_trial %}
+            <span class="lesson-tag trial">试学</span>
+            {% endif %}
+            {% if lesson.duration %}
+            <span class="lesson-duration"><i class="far fa-clock"></i> {{ lesson.duration }}分钟</span>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% empty %}
+    <div class="chapter-empty">
+      <i class="fas fa-book-open"></i>
+      <p>暂无可用的章节内容</p>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- 返回按钮 -->
+  <div class="back-bar">
+    <a href="{% url 'courseApp:course' %}" class="back-btn">
+      <i class="fas fa-arrow-left"></i> 返回课程广场
+    </a>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'plugins/sweetalert/sweetalert2.all.min.js' %}"></script>
+<script>
+// 练习模式数据
+const PRACTICE_MODES = [
+  {
+    key: 'typing',
+    icon: 'fa-keyboard',
+    title: '打字练习',
+    desc: '根据听到或看到的内容，快速准确地输入中文，提升打字速度和汉字识别能力。',
+    color: 'typing'
+  },
+  {
+    key: 'speaking',
+    icon: 'fa-microphone',
+    title: '口语练习',
+    desc: '模仿标准发音，跟读句子，AI智能评分帮助您改善发音和语调。',
+    color: 'speaking'
+  },
+  {
+    key: 'translate',
+    icon: 'fa-language',
+    title: '英译中模式',
+    desc: '阅读英文句子或短文，将其翻译成中文，锻炼中英转换思维能力。',
+    color: 'translate'
+  },
+  {
+    key: 'listening',
+    icon: 'fa-headphones',
+    title: '听力模式',
+    desc: '聆听中文音频，理解内容并回答问题，提高听力理解水平。',
+    color: 'listening'
+  },
+  {
+    key: 'sorting',
+    icon: 'fa-puzzle-piece',
+    title: '拆句重组',
+    desc: '将打乱顺序的词语或短句重新排列，组成正确的中文句子，锻炼语序与逻辑能力。',
+    color: 'sorting'
+  },
+  {
+    key: 'writing',
+    icon: 'fa-pen-nib',
+    title: '写字模式',
+    desc: '在屏幕上练习书写汉字，掌握笔画顺序与字形结构，巩固汉字记忆。',
+    color: 'writing'
+  }
+];
+
+let currentSlide = 0;
+
+function showPracticeModal(lessonName, lessonId) {
+  currentSlide = 0;
+  const html = buildCarouselHTML(lessonName, lessonId);
+
+  Swal.fire({
+    title: lessonName,
+    html: html,
+    showConfirmButton: false,
+    showCloseButton: true,
+    width: 420,
+    padding: '0 0 20px',
+    background: '#fff',
+    customClass: {
+      popup: 'practice-modal-popup',
+      closeButton: 'practice-close-btn'
+    },
+    didOpen: () => {
+      // Bind carousel controls
+      document.querySelector('.carousel-arrow.prev')?.addEventListener('click', prevSlide);
+      document.querySelector('.carousel-arrow.next')?.addEventListener('click', nextSlide);
+      document.querySelectorAll('.carousel-dot').forEach(dot => {
+        dot.addEventListener('click', function() {
+          goToSlide(parseInt(this.dataset.index));
+        });
+      });
+    }
+  });
+}
+
+function buildCarouselHTML(lessonName, lessonId) {
+  let slides = '';
+  PRACTICE_MODES.forEach((mode, i) => {
+    slides += `
+      <div class="mode-slide">
+        <div class="mode-icon ${mode.color}">
+          <i class="fas ${mode.icon}"></i>
+        </div>
+        <div class="mode-title">${mode.title}</div>
+        <div class="mode-desc">${mode.desc}</div>
+        <button class="mode-start-btn ${mode.color}" onclick="startPractice('${mode.key}', ${lessonId})">
+          <i class="fas fa-play"></i> 开始练习
+        </button>
+      </div>
+    `;
+  });
+
+  let dots = '';
+  PRACTICE_MODES.forEach((_, i) => {
+    dots += `<button class="carousel-dot${i === 0 ? ' active' : ''}" data-index="${i}"></button>`;
+  });
+
+  return `
+    <div class="practice-modal-container">
+      <div class="mode-carousel">
+        <button class="carousel-arrow prev"><i class="fas fa-chevron-left"></i></button>
+        <button class="carousel-arrow next"><i class="fas fa-chevron-right"></i></button>
+        <div class="mode-track" id="modeTrack">
+          ${slides}
+        </div>
+      </div>
+      <div class="carousel-dots">${dots}</div>
+    </div>
+  `;
+}
+
+function goToSlide(index) {
+  currentSlide = index;
+  const track = document.getElementById('modeTrack');
+  if (track) {
+    track.style.transform = `translateX(-${index * 100}%)`;
+  }
+  document.querySelectorAll('.carousel-dot').forEach((dot, i) => {
+    dot.classList.toggle('active', i === index);
+  });
+}
+
+function prevSlide() {
+  const next = currentSlide > 0 ? currentSlide - 1 : PRACTICE_MODES.length - 1;
+  goToSlide(next);
+}
+
+function nextSlide() {
+  const next = currentSlide < PRACTICE_MODES.length - 1 ? currentSlide + 1 : 0;
+  goToSlide(next);
+}
+
+function startPractice(mode, lessonId) {
+  Swal.close();
+  if (mode === 'sorting') {
+    window.location.href = '/practiceApp/' + lessonId + '/sorting/';
+  } else if (mode === 'writing') {
+    window.location.href = '/practiceApp/' + lessonId + '/writing/';
+  } else {
+    window.location.href = '/practiceApp/' + lessonId + '/?mode=' + mode;
+  }
+}
+</script>
+{% endblock %}

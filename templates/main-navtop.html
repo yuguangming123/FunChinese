@@ -1,0 +1,58 @@
+{% load static %}
+<nav class="navbar navbar-expand-md navbar-dark bg-dark">
+    <div class="container-fluid ms-3 me-5">
+        <a class="navbar-brand" href="/">
+            <img src="{% static 'img/logo.png' %}"/>
+            &nbsp;&nbsp;趣学汉语
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#bs-example"
+                aria-controls="bs-example" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse m-0 p-0" id="bs-example">
+            <!--下拉菜单部分-->
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link" aria-current="page" href="/">首页</a>
+                </li>
+{#                {% if request.user.username %}#}
+{#                <li class="nav-item" {% if tabnanme == "mytab" %} class="active" {% endif %}>#}
+{#                    <a class="nav-link" aria-current="page" href="{% url 'blog:myindex' request.user.id %}" data-hover="我的">我的</a>#}
+{#                </li>#}
+{#                {% endif %}#}
+            </ul>
+            <!--搜索功能部分-->
+            <form role="search" class="d-flex navbar-left" method="get" action="#">
+                <input class="form-control me-2" type="search" placeholder="搜索全站" name="q" aria-label="Search" required>
+                <button class="btn btn-success" type="submit">搜索</button>
+            </form>
+            <!--登录、个人中心按钮-->
+            <span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
+            <ul class="navbar-nav navbar-right">
+                {% if request.user.username %}
+                    <li class="nav-item me-2">
+                        {% if request.user.headimg %}
+                            <img src="{{ request.user.headimg.url }}" class="rounded-circle" alt="" width="40" height="40">
+                        {% else %}
+                            <img src="/media/avatars/default.png" class="rounded-circle" alt="" width="40" height="40">
+                        {% endif %}
+                    </li>
+                    <li class="nav-item dropdown nav-btn">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">{% if request.user.nickname %}{{ request.user.nickname }}{% else %}{{ request.user.username }}{% endif %}</a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="#">我的文章</a></li>
+                            <li><a class="dropdown-item" href="#">创作中心</a></li>
+                            <li>
+                                <hr class="dropdown-divider">
+                            </li>
+                            <li><a class="dropdown-item" href="#">注销登录</a></li>
+                        </ul>
+                    </li>
+                {% else %}
+                    <li class="nav-btn"><a class="nav-link" href="#">登录</a></li>
+                    <li class="nav-btn"><a class="nav-link" href="#">注册</a></li>
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+</nav>

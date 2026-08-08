@@ -1,0 +1,100 @@
+<div class="accordion" id="accordionExample">
+    <div class="accordion-item">
+        <div class="list-group list-group-flush nav-slider" align="center">
+            <a href="{% url 'home' %}" class="list-group-item list-group-item-action py-3 d-flex align-items-center{% if active_menu == 'home-menu' %} active{% endif %}" id="home-menu"><i class="fa-sharp fa-solid fa-house"></i>&nbsp;&nbsp;&nbsp;首&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;页&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="ms-auto" style="width:1.25rem"></span></a>
+        </div>
+    </div>
+    <div class="accordion-item">
+        <div class="list-group list-group-flush nav-slider" align="center">
+            <h2 class="accordion-header">
+                <a class="accordion-button{% if collapse_menu != 'collapse-std' %} collapsed{% endif %} py-3" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-std" aria-expanded="{% if collapse_menu == 'collapse-std' %}true{% else %}false{% endif %}" aria-controls="collapseThree"  style="text-decoration: none">
+                    <i class="fa-sharp fa-solid fa-books"></i>&nbsp;&nbsp;学习资源&nbsp;&nbsp;
+                </a>
+            </h2>
+        </div>
+        <div id="collapse-std" class="accordion-collapse collapse{% if collapse_menu == 'collapse-std' %} show{% endif %}" data-bs-parent="#accordionExample">
+            <div class="list-group list-group-flush nav-slider" align="center">
+                <div class="accordion-bodym-0 p-0" align="center">
+                    <a href="{% url 'courseApp:course' %}" class="list-group-item list-group-item-action py-3{% if active_menu == 'course-menu' %} active{% endif %}" id="course-menu">&nbsp;&nbsp;<i class="fa-solid fa-chalkboard-user"></i>&nbsp;&nbsp;&nbsp;课程广场</a>
+                    <a href="{% url 'textbookApp:textbook' %}" class="list-group-item list-group-item-action py-3{% if active_menu == 'textbook-menu' %} active{% endif %}" id="textbook-menu">&nbsp;&nbsp;<i class="fa-solid fa-book"></i>&nbsp;&nbsp;&nbsp;教材同步</a>
+                    <a href="{% url 'vocabularyAPP:vocabulary' %}" class="list-group-item list-group-item-action py-3{% if active_menu == 'vocabulary-menu' %} active{% endif %}" id="vocabulary-menu">&nbsp;&nbsp;<i class="fa-sharp fa-solid fa-file-word"></i>&nbsp;&nbsp;&nbsp;单词仓库</a>
+                    <a href="#" class="list-group-item list-group-item-action py-3" id="sentence-menu">&nbsp;&nbsp;<i class="fa-sharp fa-solid fa-face-shaking"></i>&nbsp;&nbsp;&nbsp;拼音学习</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="accordion-item">
+        <div class="list-group list-group-flush nav-slider" align="center">
+            <h2 class="accordion-header">
+                <a class="accordion-button{% if collapse_menu != 'collapse-cur' %} collapsed{% endif %} py-3" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-cur" aria-expanded="{% if collapse_menu == 'collapse-cur' %}true{% else %}false{% endif %}" aria-controls="collapseTwo" style="text-decoration: none">
+                    <i class="fa-sharp fa-solid fa-brain-circuit"></i>&nbsp;&nbsp;AI辅助&nbsp;&nbsp;
+                </a>
+            </h2>
+        </div>
+        <div id="collapse-cur" class="accordion-collapse collapse{% if collapse_menu == 'collapse-cur' %} show{% endif %}" data-bs-parent="#accordionExample">
+            <div class="list-group list-group-flush nav-slider" align="center">
+                <div class="accordion-body m-0 p-0" align="center">
+                    <a href="#" class="list-group-item list-group-item-action py-3{% if active_menu == 'curr-list' %} active{% endif %}" id="curr-list">&nbsp;&nbsp;&nbsp;<i class="fa-solid fa-comment-dot"></i>&nbsp;&nbsp;&nbsp;AI对话&nbsp;&nbsp;</a>
+                    <a href="#" class="list-group-item list-group-item-action py-3{% if active_menu == 'semester-cour-list' %} active{% endif %}" id="semester-cour-list">&nbsp;&nbsp;&nbsp;<i class="fa-solid fa-boxing-glove"></i>&nbsp;&nbsp;PK竞技&nbsp;&nbsp;</a>
+                    <a href="#" class="list-group-item list-group-item-action py-3{% if active_menu == 'teachers_cour_list' %} active{% endif %}" id="teachers_cour_list">&nbsp;&nbsp;&nbsp;<i class="fa-sharp fa-solid fa-ranking-star"></i>&nbsp;&nbsp;&nbsp;排行榜&nbsp;&nbsp;</a>
+                    <a href="#" class="list-group-item list-group-item-action py-3{% if active_menu == 'class-cour-list' %} active{% endif %}" id="class-cour-list">&nbsp;&nbsp;&nbsp;<i class="fa-sharp fa-solid fa-alarm-plus"></i>&nbsp;&nbsp;&nbsp;AI创课&nbsp;&nbsp;</a>
+                </div>
+             </div>
+        </div>
+    </div>
+    <div class="accordion-item">
+        <div class="list-group list-group-flush nav-slider" align="center">
+            <a href="#" class="list-group-item list-group-item-action py-3 d-flex align-items-center{% if active_menu == 'community-menu' %} active{% endif %}" id="community-menu"><i class="fa-solid fa-arrows-down-to-people"></i>&nbsp;&nbsp;&nbsp;趣学社区&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="ms-auto" style="width:1.25rem"></span></a>
+        </div>
+    </div>
+    <div class="accordion-item">
+        <div class="list-group list-group-flush nav-slider" align="center">
+            <h2 class="accordion-header">
+                <a class="accordion-button{% if collapse_menu != 'collapse-gda' %} collapsed{% endif %} py-3" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-gda" aria-expanded="{% if collapse_menu == 'collapse-gda' %}true{% else %}false{% endif %}" aria-controls="collapseThree"  style="text-decoration: none">
+                    <i class="fa-sharp fa-solid fa-handshake"></i>&nbsp;&nbsp;合伙人计划&nbsp;&nbsp;
+                </a>
+            </h2>
+        </div>
+        <div id="collapse-gda" class="accordion-collapse collapse{% if collapse_menu == 'collapse-gda' %} show{% endif %}" data-bs-parent="#accordionExample">
+            <div class="list-group list-group-flush nav-slider" align="center">
+                <div class="accordion-bodym-0 p-0" align="center">
+                    <a href="#" class="list-group-item list-group-item-action py-3{% if active_menu == 'isp_list' %} active{% endif %}" id="isp_list">&nbsp;&nbsp;<i class="fa-etch fa-solid fa-arrow-right-to-bracket"></i>&nbsp;&nbsp;&nbsp;加入我们</a>
+                    <a href="#" class="list-group-item list-group-item-action py-3{% if active_menu == 'member-menu' %} active{% endif %}" id="member-menu">&nbsp;&nbsp;<i class="fa-solid fa-crown"></i>&nbsp;&nbsp;&nbsp;开通会员</a>
+                    <a href="#" class="list-group-item list-group-item-action py-3{% if active_menu == 'reward-menu' %} active{% endif %}" id="reward-menu">&nbsp;&nbsp;<i class="fa-sharp fa-solid fa-award"></i>&nbsp;&nbsp;&nbsp;推广奖励</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="accordion-item">
+        <div class="list-group list-group-flush nav-slider" align="center">
+            <h2 class="accordion-header">
+                <a class="accordion-button{% if collapse_menu != 'collapse-set' %} collapsed{% endif %} py-3" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-set" aria-expanded="{% if collapse_menu == 'collapse-set' %}true{% else %}false{% endif %}" aria-controls="collapseThree"  style="text-decoration: none">
+                    <i class="far fa-tools" id="setting-menu"></i>&nbsp;&nbsp;系统设置&nbsp;&nbsp;
+                </a>
+            </h2>
+        </div>
+        <div id="collapse-set" class="accordion-collapse collapse{% if collapse_menu == 'collapse-set' %} show{% endif %}" data-bs-parent="#accordionExample">
+            <div class="list-group list-group-flush nav-slider" align="center">
+                <div class="accordion-bodym-0 p-0" align="center">
+                    <a href="#" class="list-group-item list-group-item-action py-3{% if active_menu == 'user-settings-menu' %} active{% endif %}" id="user-settings-menu">&nbsp;&nbsp;<i class="fas fa-users"></i>&nbsp;&nbsp;&nbsp;用户设置</a>
+                    <a href="#" class="list-group-item list-group-item-action py-3{% if active_menu == 'copyright-menu' %} active{% endif %}" id="copyright-menu">&nbsp;&nbsp;<i class="fal fa-newspaper"></i>&nbsp;&nbsp;&nbsp;版权申明</a>
+                    <a href="#" class="list-group-item list-group-item-action py-3{% if active_menu == 'help-menu' %} active{% endif %}" id="help-menu">&nbsp;&nbsp;<i class="fas fa-question-circle"></i>&nbsp;&nbsp;&nbsp;帮助文档</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!--设置被选中的菜单处于激活激活状态,展开菜单展开展开状态-->
+<script type="text/javascript">
+    // 兜底：如果模板条件未能生效，通过 JS 补充激活/展开状态
+    var menuId = '{{ active_menu }}';
+    if (menuId && !$('#' + menuId).hasClass('active')) {
+        $('#' + menuId).addClass('active');
+    }
+    var collapseId = '{{ collapse_menu }}';
+    if (collapseId && !$('#' + collapseId).hasClass('show')) {
+        $('#' + collapseId).addClass('show');
+    }
+</script>

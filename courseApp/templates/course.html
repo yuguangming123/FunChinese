@@ -1,0 +1,64 @@
+{% extends 'main-base.html' %}
+{% load static %}
+
+{% block title %}课程广场{% endblock %}
+
+{% block content %}
+<div class="course-mall">
+  <!-- 分类筛选栏 -->
+  <div class="category-filter">
+    <a href="{% url 'courseApp:course' %}"
+       class="category-item {% if current_category == 0 %}active{% endif %}">
+      全部
+    </a>
+    {% for cat in categories %}
+    <a href="{% url 'courseApp:course' %}?category={{ cat.id }}"
+       class="category-item {% if current_category == cat.id %}active{% endif %}">
+      {{ cat.name }}
+    </a>
+    {% endfor %}
+  </div>
+
+  <!-- 课程卡片网格 -->
+  <div class="course-grid">
+    {% for course in courses %}
+    <a href="{% url 'courseApp:course_detail' course.id %}" class="course-card" style="text-decoration:none;color:inherit;">
+      <div class="card-img">
+        {% if course.cover_image %}
+        <img src="{{ course.cover_image.url }}" alt="{{ course.name }}">
+        {% else %}
+        <img src="{% static 'img/default-course.png' %}" alt="{{ course.name }}">
+        {% endif %}
+        {% if course.is_free %}
+        <span class="card-tag">免费</span>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        <h3 class="card-title">{{ course.name }}</h3>
+        <div class="card-meta">
+          <div class="teacher-info">
+            <span class="teacher-avatar">
+              {% if course.teacher %}
+              <img src="{% static 'img/default-avatar.png' %}" alt="{{ course.teacher.username }}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;">
+              {% endif %}
+            </span>
+            <span class="teacher-name">
+              {% if course.teacher %}{{ course.teacher.username }}{% else %}平台名师{% endif %}
+            </span>
+          </div>
+          <div class="heat-info">
+            <i class="fas fa-fire"></i>
+            <span>{{ course.heat }}</span>
+          </div>
+        </div>
+      </div>
+    </a>
+    {% empty %}
+    <div class="course-empty">
+      <i class="fas fa-book-open"></i>
+      <p>暂无课程，敬请期待</p>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

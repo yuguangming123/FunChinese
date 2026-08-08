@@ -1,0 +1,227 @@
+/* ========== 启用自定义词库：复选框卡片样式（纯 CSS3） ========== */
+
+/* 复选框外层容器 - 水平 flex 排列 */
+html body .field-selected_dicts ul,
+html body .field-selected_dicts ul[id$="_selected_dicts"] {
+    list-style: none;
+    padding-left: 0;
+    margin: 8px 0 4px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+/* 每个复选框项 - 卡片式 */
+html body .field-selected_dicts ul li {
+    display: inline-flex;
+    align-items: center;
+    padding: 10px 18px;
+    border: 1.5px solid #dee2e6;
+    border-radius: 8px;
+    background: #fff;
+    margin: 0;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    border-left: 3px solid transparent;
+    transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+html body .field-selected_dicts ul li:hover {
+    border-color: #20c997;
+    background: #f0fdf9;
+    box-shadow: 0 2px 6px rgba(32, 201, 151, 0.12);
+}
+
+/* 选中时 - 卡片高亮 */
+html body .field-selected_dicts ul li:has(input[type="checkbox"]:checked) {
+    background: #f0fdf9;
+    border-color: #20c997;
+    border-left-color: #20c997;
+}
+
+/* checkbox 本体美化 */
+html body .field-selected_dicts ul li input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin-right: 8px;
+    accent-color: #20c997;
+    cursor: pointer;
+    flex-shrink: 0;
+    border-radius: 4px;
+}
+
+/* 标签文字 */
+html body .field-selected_dicts ul li label {
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    margin: 0;
+    padding: 0;
+    color: #212529;
+    line-height: 1.4;
+}
+
+/* ========== 两区域 Bootstrap 5 等价样式（纯 CSS3，作用域隔离） ==========
+   不引入全局 bootstrap5，仅让「启用自定义词库」「自动配图」两区域呈现
+   bootstrap5 布局与外观，不影响页面其它元素。 */
+
+/* 栅格 */
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .row {
+    --bs-gutter-x: 1.5rem;
+    --bs-gutter-y: 0;
+    display: flex;
+    flex-wrap: wrap;
+    margin-top: calc(-1 * var(--bs-gutter-y));
+    margin-right: calc(-.5 * var(--bs-gutter-x));
+    margin-left: calc(-.5 * var(--bs-gutter-x));
+}
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .row > * {
+    flex-shrink: 0;
+    width: 100%;
+    max-width: 100%;
+    padding-top: var(--bs-gutter-y);
+    padding-right: calc(var(--bs-gutter-x) * .5);
+    padding-left: calc(var(--bs-gutter-x) * .5);
+}
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .row.g-1 { --bs-gutter-x: .25rem; --bs-gutter-y: .25rem; }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .row.g-2 { --bs-gutter-x: .5rem; --bs-gutter-y: .5rem; }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .col-auto { flex: 0 0 auto; width: auto; }
+
+/* flex / 布局 */
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .d-flex { display: flex; }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .d-inline-flex { display: inline-flex; }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .d-none { display: none; }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .flex-wrap { flex-wrap: wrap; }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .align-items-center { align-items: center; }
+
+/* 间距 */
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .gap-1 { gap: .25rem; }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .gap-2 { gap: .5rem; }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .mt-1 { margin-top: .25rem; }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .mt-2 { margin-top: .5rem; }
+
+/* 文本 */
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .text-muted { color: #6c757d; }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .text-nowrap { white-space: nowrap; }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .fw-semibold { font-weight: 600; }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .col-form-label {
+    padding-top: calc(.375rem + 1px);
+    padding-bottom: calc(.375rem + 1px);
+    margin-bottom: 0;
+    font-size: inherit;
+    line-height: 1.5;
+}
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .col-form-label-sm {
+    padding-top: calc(.25rem + 1px);
+    padding-bottom: calc(.25rem + 1px);
+    font-size: .875rem;
+}
+
+/* 表单控件 */
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .form-control {
+    display: block;
+    width: 100%;
+    padding: .375rem .75rem;
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.5;
+    color: #212529;
+    background-color: #fff;
+    background-clip: padding-box;
+    border: 1px solid #ced4da;
+    border-radius: .375rem;
+    transition: border-color .15s ease-in-out, box-shadow .15s ease-in-out;
+}
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .form-control:focus {
+    color: #212529;
+    background-color: #fff;
+    border-color: #86b7fe;
+    outline: 0;
+    box-shadow: 0 0 0 .25rem rgba(13, 110, 253, .25);
+}
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .form-control[readonly] {
+    background-color: #e9ecef;
+    opacity: 1;
+}
+
+/* 按钮 */
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .btn {
+    display: inline-block;
+    padding: .375rem .75rem;
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.5;
+    color: #212529;
+    text-align: center;
+    text-decoration: none;
+    vertical-align: middle;
+    cursor: pointer;
+    user-select: none;
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: .375rem;
+    transition: color .15s ease-in-out, background-color .15s ease-in-out, border-color .15s ease-in-out, box-shadow .15s ease-in-out;
+}
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .btn-primary { color: #fff; background-color: #0d6efd; border-color: #0d6efd; }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .btn-primary:hover { color: #fff; background-color: #0a58ca; border-color: #084298; box-shadow: 0 2px 6px rgba(13, 110, 253, .4); }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .btn-success { color: #fff; background-color: #198754; border-color: #198754; }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .btn-success:hover { color: #fff; background-color: #146c43; border-color: #0f5132; box-shadow: 0 2px 6px rgba(25, 135, 84, .4); }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .btn-info { color: #000; background-color: #0dcaf0; border-color: #0dcaf0; }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .btn-info:hover { color: #000; background-color: #25cff2; border-color: #0aa2c0; box-shadow: 0 2px 6px rgba(13, 202, 240, .4); }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .btn-outline-secondary { color: #6c757d; border-color: #6c757d; }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .btn-outline-secondary:hover { color: #fff; background-color: #5c636a; border-color: #5c636a; box-shadow: 0 2px 6px rgba(108, 117, 125, .3); }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .btn-outline-danger { color: #dc3545; border-color: #dc3545; }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .btn-outline-danger:hover { color: #fff; background-color: #b02a37; border-color: #b02a37; box-shadow: 0 2px 6px rgba(220, 53, 69, .3); }
+
+/* 按钮组（配图引擎胶囊组） */
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .btn-group {
+    position: relative;
+    display: inline-flex;
+    vertical-align: middle;
+    border-radius: .375rem;
+}
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .btn-group > .btn { position: relative; flex: 1 1 auto; }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .btn-group > .btn:not(:first-child) { margin-left: -1px; }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .btn-group > .btn:first-child:not(:last-child) { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .btn-group > .btn:not(:first-child):not(:last-child) { border-radius: 0; }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .btn-group > .btn:last-child:not(:first-child) { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+
+/* 引擎 radio（btn-check 隐藏 + 选中态） */
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .btn-check {
+    position: absolute;
+    clip: rect(0, 0, 0, 0);
+    pointer-events: none;
+}
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .btn-check:checked + .btn { color: #fff; background-color: #0d6efd; border-color: #0d6efd; }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .btn-check:checked + .btn-outline-secondary { color: #fff; background-color: #6c757d; border-color: #6c757d; }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .btn-check:checked + .btn-outline-secondary:hover { color: #fff; background-color: #6c757d; border-color: #6c757d; }
+
+/* 图片搜索宫格（_imgGallery） */
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .col-4 {
+    flex: 0 0 auto;
+    width: 33.33333333%;
+}
+@media (min-width: 768px) {
+    html body :is(.field-selected_dicts, .field-_auto_image_btn) .col-md-3 { flex: 0 0 auto; width: 25%; }
+}
+@media (min-width: 992px) {
+    html body :is(.field-selected_dicts, .field-_auto_image_btn) .col-lg-2 { flex: 0 0 auto; width: 16.66666667%; }
+}
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    background-color: #fff;
+    background-clip: border-box;
+    border: 1px solid rgba(0, 0, 0, .175);
+    border-radius: .375rem;
+}
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .card-sm { border-radius: .25rem; }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .card-img-top { width: 100%; }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .card-footer {
+    padding: .5rem 1rem;
+    background-color: rgba(0, 0, 0, .03);
+    border-top: 1px solid rgba(0, 0, 0, .175);
+}
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .border { border: 1px solid #dee2e6 !important; }
+html body :is(.field-selected_dicts, .field-_auto_image_btn) .border-success { border-color: #6820ea !important; border-width: 3px !important; }

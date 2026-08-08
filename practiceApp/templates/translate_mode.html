@@ -1,0 +1,643 @@
+{% extends "pra_base.html" %}{% load static %}
+{% block title %}翻海投模式-{{ lesson.name }}{% endblock %}
+{% block content %}
+<div class="practice-page"><div class="mode-panel active">
+  <div class="content-area" id="translateContentArea">
+    <div class="translate-toggles">
+      <label class="toggle-switch">
+        <input type="checkbox" id="toggleImage" checked>
+        <span class="toggle-slider"></span>
+        <span class="toggle-label">显示图片</span>
+      </label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="togglePinyin" checked>
+        <span class="toggle-slider"></span>
+        <span class="toggle-label">显示拼音</span>
+      </label>
+      <button class="translate-help-btn" onclick="showTranslateHelp()" title="????"><i class="fas fa-question-circle"></i></button>
+    </div>
+    <div class="sentence-image" id="sentenceImage"></div>
+    <div class="text-center fs-5 fw-bold" style="color:#f57c00;margin:16px 24px 12px;" id="translateEnglish"></div>
+    <div class="word-lines-wrap" id="wordLinesWrap">
+      <div class="word-lines" id="wordLines"></div>
+    </div>
+    <input type="text" id="translateInput" autocomplete="off" style="position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;">
+  </div>
+</div></div>
+
+<style>
+.word-lines-wrap {
+  display: flex; justify-content: center; padding: 20px 24px; margin: 8px 0 0;
+  background: #f8f9fb; min-height: 100px; align-items: center;
+}
+.word-lines {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; align-items: flex-end;
+}
+.word-line {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer;
+  padding: 4px 6px; border-radius: 6px; transition: all 0.2s; position: relative; background: transparent;
+}
+.word-line .line-pinyin {
+  font-size: 16px; color: #9c27b0; min-height: 1.3em; text-align: center;
+  letter-spacing: 1px;
+}
+.word-line .line-bar {
+  height: 4px; background: #d1d5db; border-radius: 2px; transition: all 0.2s;
+}
+.word-line .line-text {
+  font-size: 28px; font-weight: 600; color: #2563eb; min-height: 1.4em;
+  text-align: center; letter-spacing: 2px;
+  display: flex; align-items: center; justify-content: center;
+}
+.word-line.active { background: transparent; }
+.word-line.active .line-bar { background: #20c997; height: 5px; }
+.word-line.correct .line-text { color: #20c997; }
+.word-line.correct .line-bar { background: #20c997; }
+.word-line.wrong .line-text { color: #e74c3c; }
+.word-line.wrong .line-bar { background: #e74c3c; }
+.word-line.done .line-text { color: #20c997; }
+.word-line.done .line-bar { background: #20c997; }
+
+/* 标点符号：显示在横线之间 */
+.translate-punct {
+    display: inline-flex;
+    align-items: flex-end;
+    font-size: 28px;
+    font-weight: 700;
+    color: #1a1a1a;
+    padding: 0 2px;
+    line-height: 1.4;
+    user-select: none;
+    pointer-events: none;
+    padding-bottom: 6px;
+}
+
+/* ---- 完成弹窗 ---- */
+.complete-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,0.4); display: flex;
+  align-items: center; justify-content: center;
+}
+.complete-modal {
+  background: #fff; border-radius: 16px; padding: 28px 32px 24px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.15);
+  display: flex; flex-direction: column; align-items: center;
+  max-width: 90vw; width: auto;
+}
+.complete-modal .cm-title {
+  font-size: 22px; font-weight: 700; color: #20c997; margin-bottom: 20px;
+}
+.complete-modal .cm-cards {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-bottom: 16px;
+}
+.complete-modal .cm-card {
+  flex: 0 0 auto; background: #f8f9fb; border-radius: 10px;
+  padding: 12px 18px 10px; border: 1px solid #f0f0f0;
+  display: flex; flex-direction: column; align-items: center;
+}
+.complete-modal .cm-card .cm-pinyin {
+  font-size: 14px; color: #20c997; font-weight: 500; line-height: 1.2; text-align: center;
+}
+.complete-modal .cm-card .cm-word {
+  font-size: 24px; font-weight: 700; color: #1a1a1a; line-height: 1.4; margin-top: 2px;
+  text-align: center; padding-bottom: 4px; border-bottom: 2px solid rgba(0,0,0,0.1);
+}
+.complete-modal .cm-card .cm-meaning {
+  font-size: 13px; color: #f57c00; margin-top: 2px; line-height: 1.2; text-align: center;
+}
+.complete-modal .cm-card .cm-grammar {
+  font-size: 12px; padding: 1px 8px; border-radius: 4px; margin-top: 4px;
+  color: #fff; background: #ddd;
+}
+.complete-modal .cm-card.card-subject { background: #e3f2fd; border-color: #bbdefb; }
+.complete-modal .cm-card.card-subject .cm-word { color: #1565c0; }
+.complete-modal .cm-card.card-subject .cm-grammar { background: #1565c0; }
+.complete-modal .cm-card.card-predicate { background: #e8f5e9; border-color: #c8e6c9; }
+.complete-modal .cm-card.card-predicate .cm-word { color: #2e7d32; }
+.complete-modal .cm-card.card-predicate .cm-grammar { background: #2e7d32; }
+.complete-modal .cm-card.card-object { background: #fff3e0; border-color: #ffe0b2; }
+.complete-modal .cm-card.card-object .cm-word { color: #e65100; }
+.complete-modal .cm-card.card-object .cm-grammar { background: #e65100; }
+.complete-modal .cm-card.card-attributive { background: #fce4ec; border-color: #f8bbd0; }
+.complete-modal .cm-card.card-attributive .cm-word { color: #c62828; }
+.complete-modal .cm-card.card-attributive .cm-grammar { background: #c62828; }
+.complete-modal .cm-card.card-adverbial { background: #f3e5f5; border-color: #e1bee7; }
+.complete-modal .cm-card.card-adverbial .cm-word { color: #6a1b9a; }
+.complete-modal .cm-card.card-adverbial .cm-grammar { background: #6a1b9a; }
+.complete-modal .cm-card.card-complement { background: #e0f7fa; border-color: #b2ebf2; }
+.complete-modal .cm-card.card-complement .cm-word { color: #00695c; }
+.complete-modal .cm-card.card-complement .cm-grammar { background: #00695c; }
+.complete-modal .cm-punct {
+    display: inline-flex;
+    align-items: flex-end;
+    font-size: 24px;
+    font-weight: 700;
+    color: #1a1a1a;
+    padding: 0 4px;
+    line-height: 1.4;
+    user-select: none;
+}
+.complete-modal .cm-card.card-empty { background: #f5f5f5; border-color: #e0e0e0; }
+.complete-modal .cm-card.card-empty .cm-word { color: #605f5f; }
+.complete-modal .cm-card.card-empty .cm-pinyin { color: #bbb; }
+.complete-modal .cm-card.card-empty .cm-meaning { color: #bbb; }
+.complete-modal .cm-card.card-empty .cm-grammar { background: #ccc; color: #fff; }
+.complete-modal .cm-sentence {
+  font-size: 18px; font-weight: 600; color: #f57c00; text-align: center;
+  margin-bottom: 20px; letter-spacing: 1px;
+}
+.complete-modal .cm-btn {
+  padding: 10px 36px; border-radius: 10px; border: none;
+  background: linear-gradient(135deg, #20c997, #38d9a9); color: #fff;
+  font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+}
+.complete-modal .cm-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(32,201,151,0.3); }
+</style>
+{% endblock %}
+{% block extra_js %}
+<script>
+const EXERCISES_BY_MODE = {{ exercises_by_mode_json|safe }};
+let translateEx = [], translateIdx = 0, lineIdx = 0;
+let lineInputs = [], wordCount = 0, contentCount = 0, compareDone = false, isComposing = false;
+let contentWords = []; // 仅含实词
+
+// 判断是否为标点
+function isPunctWord(w) {
+    return w && !w.pinyin && !w.pos && !w.grammar;
+}
+
+function startNewSession(mode) {
+  fetch('{% url "practiceApp:start_session" %}', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+    body: JSON.stringify({lesson_id: {{ lesson.id }}, mode: mode, exercises: EXERCISES_BY_MODE[mode] || []})
+  });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  translateEx = EXERCISES_BY_MODE['translate'] || [];
+  if (!translateEx.length) return;
+
+  // 开关初始化
+  function applyToggle(cls, show) {
+    document.querySelectorAll('.' + cls).forEach(function(el) { el.classList.toggle('hidden', !show); });
+  }
+  function initToggle(id, cls) {
+    var cb = document.getElementById(id);
+    var saved = localStorage.getItem('translate_' + id);
+    if (saved === '0') { cb.checked = false; applyToggle(cls, false); }
+    cb.addEventListener('change', function() {
+      var on = cb.checked;
+      localStorage.setItem('translate_' + id, on ? '1' : '0');
+      applyToggle(cls, on);
+    });
+  }
+  initToggle('toggleImage', 'sentence-image');
+  initToggle('togglePinyin', 'line-pinyin');
+
+  render();
+  startNewSession('translate');
+  var inp = document.getElementById('translateInput');
+  inp.addEventListener('compositionstart', function(){
+    isComposing = true;
+    inp._savedLine = lineInputs[lineIdx];
+  });
+  inp.addEventListener('compositionend', function(){
+    isComposing = false;
+    if (inp.value) {
+      playTypingWav();
+      lineInputs[lineIdx] = (inp._savedLine || '') + inp.value;
+      inp.value = ''; inp._savedLine = '';
+      updateLineDisplay();
+      tryNextLine();
+    }
+  });
+  inp.addEventListener('input', function(e){
+    if (isComposing || e.isComposing) return;
+    if (inp.value) {
+      playTypingWav();
+      lineInputs[lineIdx] += inp.value;
+      inp.value = '';
+      updateLineDisplay();
+      tryNextLine();
+    }
+  });
+  // 预加载 typing.wav
+  fetch('{% static "sound/typing.wav" %}')
+    .then(function(r){ return r.arrayBuffer(); })
+    .then(function(buf){ getAudioCtx().decodeAudioData(buf, function(b){ typingBuffer = b; }); });
+
+  document.addEventListener('keydown', function(e) {
+    if (!soundCtx) soundCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!e.ctrlKey && !e.metaKey && !e.altKey) playTypingWav();
+    if (e.key === ' ' && !isComposing) {
+      e.preventDefault();
+      if (lineIdx < contentCount - 1) { lineIdx++; focusLine(); }
+      return;
+    }
+    if (e.key === 'Backspace' && !isComposing) {
+      e.preventDefault();
+      if (lineInputs[lineIdx].length > 0) {
+        lineInputs[lineIdx] = lineInputs[lineIdx].slice(0, -1);
+        updateLineDisplay();
+      }
+      return;
+    }
+    if (e.key === 'ArrowRight' && !isComposing) {
+      e.preventDefault();
+      if (lineIdx < contentCount - 1) { lineIdx++; focusLine(); }
+      return;
+    }
+    if (e.key === 'ArrowLeft' && !isComposing) {
+      e.preventDefault();
+      if (lineIdx > 0) { lineIdx--; focusLine(); }
+      return;
+    }
+    if (document.activeElement !== inp) inp.focus();
+  });
+  document.addEventListener('click', function(e) {
+    var line = e.target.closest('.word-line');
+    if (line) {
+      var idx = parseInt(line.dataset.idx);
+      if (!isNaN(idx)) { lineIdx = idx; focusLine(); inp.focus(); }
+    }
+  });
+  setTimeout(function(){ inp.focus(); }, 100);
+  updateProgress();
+});
+
+function render() {
+  if (!translateEx.length) return;
+  var q = translateEx[translateIdx];
+  var imgC = document.getElementById('sentenceImage');
+  imgC.innerHTML = q.image_url
+    ? '<img src="' + q.image_url + '" alt="sentence">'
+    : '<div class="placeholder"><i class="fas fa-image"></i></div>';
+  document.getElementById('translateEnglish').textContent = q.english || '';
+
+  var allWords = q.word_analysis || [];
+  // 分离标点和实词
+  contentWords = allWords.filter(function(w){ return !isPunctWord(w); });
+  var punctFlags = allWords.map(function(w){ return isPunctWord(w); });
+  wordCount = allWords.length;
+  contentCount = contentWords.length;
+  lineInputs = contentWords.map(function(){ return ''; });
+  lineIdx = 0; compareDone = false;
+
+  var container = document.getElementById('wordLines');
+  if (allWords.length) {
+    var html = '';
+    var ci = 0; // content word index
+    for (var i = 0; i < allWords.length; i++) {
+      if (punctFlags[i]) {
+        // 标点：直接显示，不带横线
+        html += '<span class="translate-punct">' + escHtml(allWords[i].word) + '</span>';
+      } else {
+        var len = (allWords[i].word || '').length;
+        var width = Math.max(len * 26 + 20, 40);
+        html += '<div class="word-line' + (ci === 0 ? ' active' : '') + '" data-idx="' + ci + '" data-word="' + escHtml(contentWords[ci].word) + '">' +
+          '<div class="line-pinyin">' + escHtml(contentWords[ci].pinyin || '') + '</div>' +
+          '<div class="line-text"></div>' +
+          '<div class="line-bar" style="width:' + width + 'px;"></div></div>';
+        ci++;
+      }
+    }
+    container.innerHTML = html;
+  } else {
+    container.innerHTML = '<div style="color:#ccc;padding:40px;">暂无题目</div>';
+  }
+
+  var inp = document.getElementById('translateInput'); inp.value = '';
+  updateProgress();
+  repositionInput();
+  var q2 = translateEx[translateIdx];
+  if (q2 && q2.chinese && localStorage.getItem('qwen3_auto_read') !== '0') {
+    setTimeout(function(){
+      VoicePlayer.startSpectrum('spectrumCanvas');
+      VoicePlayer.speak(q2.chinese);
+    }, 300);
+  }
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function focusLine() {
+  document.querySelectorAll('.word-line').forEach(function(el, i) {
+    el.classList.toggle('active', i === lineIdx);
+  });
+  repositionInput();
+  document.getElementById('translateInput').focus();
+}
+
+function repositionInput() {
+  var lines = document.querySelectorAll('.word-line');
+  if (lines[lineIdx]) {
+    var rect = lines[lineIdx].getBoundingClientRect();
+    var inp = document.getElementById('translateInput');
+    inp.style.left = rect.left + 'px';
+    inp.style.top = (rect.bottom + 4) + 'px';
+    inp.focus();
+  }
+}
+
+function tryNextLine() {
+  if (!contentCount || compareDone) return;
+  if (lineInputs[lineIdx] && lineIdx < contentCount - 1) {
+    lineIdx++; focusLine();
+  }
+  if (allLinesFilled()) compareAll();
+}
+
+function updateLineDisplay() {
+  var lines = document.querySelectorAll('.word-line');
+  for (var i = 0; i < contentCount && i < lines.length; i++) {
+    var textEl = lines[i].querySelector('.line-text');
+    if (textEl) textEl.textContent = lineInputs[i] || '';
+  }
+}
+
+function allLinesFilled() {
+  for (var i = 0; i < contentCount; i++) {
+    if (!lineInputs[i]) return false;
+  }
+  return true;
+}
+
+function compareAll() {
+  var q = translateEx[translateIdx];
+  var allWords = q.word_analysis || [];
+  // 重建含标点的完整句子：用户输入 + 标点
+  var reconstructed = '';
+  var ci = 0;
+  for (var i = 0; i < allWords.length; i++) {
+    if (isPunctWord(allWords[i])) {
+      reconstructed += allWords[i].word || '';
+    } else {
+      reconstructed += ci < contentCount ? (lineInputs[ci] || '').trim() : '';
+      ci++;
+    }
+  }
+  var expected = q.chinese || '';
+  var allCorrect = (reconstructed === expected);
+  // 逐词标记颜色
+  var lines = document.querySelectorAll('.word-line');
+  for (var j = 0; j < contentCount && j < lines.length; j++) {
+    var expWord = contentWords[j] ? contentWords[j].word : '';
+    if ((lineInputs[j] || '').trim() === expWord) {
+      lines[j].classList.remove('wrong', 'active'); lines[j].classList.add('correct');
+    } else {
+      lines[j].classList.remove('correct'); lines[j].classList.add('wrong');
+    }
+  }
+  if (allCorrect) {
+    compareDone = true;
+    playSound('complete');
+    updateProgress();
+    showCompleteModal();
+  } else {
+    playSound('error');
+  }
+}
+
+function playSound(name) {
+  if (name === 'error') {
+    var a = new Audio('{% static "sound/error.wav" %}');
+    a.volume = 0.3; a.play().catch(function(){ playSynth('error'); });
+    return;
+  }
+  playSynth(name);
+}
+
+function playSynth(name) {
+  try {
+    var actx = getAudioCtx();
+    var now = actx.currentTime;
+    if (name === 'error') {
+      var osc = actx.createOscillator();
+      osc.type = 'sawtooth'; osc.frequency.value = 160;
+      var g = actx.createGain();
+      g.gain.setValueAtTime(0.25, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+      osc.connect(g).connect(actx.destination);
+      osc.start(now); osc.stop(now + 0.25);
+    } else if (name === 'complete') {
+      [523, 587, 659, 698, 784].forEach(function(f, i) {
+        var oc = actx.createOscillator();
+        oc.type = 'sine'; oc.frequency.value = f;
+        var gn = actx.createGain();
+        var t0 = now + i * 0.12;
+        gn.gain.setValueAtTime(0.15, t0);
+        gn.gain.exponentialRampToValueAtTime(0.001, t0 + 0.25);
+        oc.connect(gn).connect(actx.destination);
+        oc.start(t0); oc.stop(t0 + 0.25);
+      });
+    }
+  } catch(e) {}
+}
+
+function cardClass(grammar) {
+  var map = {主语:'card-subject',谓语:'card-predicate',宾语:'card-object',定语:'card-attributive',状语:'card-adverbial',补语:'card-complement'};
+  return map[grammar] || 'card-empty';
+}
+
+function showCompleteModal() {
+  var q = translateEx[translateIdx];
+  var words = q.word_analysis || [];
+
+  // 词卡（标点直接显示符号）
+  var cardsHtml = '';
+  words.forEach(function(w) {
+    if (isPunctWord(w)) {
+      cardsHtml += '<div class="cm-punct">' + escHtml(w.word) + '</div>';
+    } else {
+      var grammar = w.grammar || '非';
+      var ccls = cardClass(grammar);
+      cardsHtml += '<div class="cm-card ' + ccls + '">' +
+        '<div class="cm-pinyin">' + escHtml(w.pinyin || '') + '</div>' +
+        '<div class="cm-word">' + escHtml(w.word || '') + '</div>' +
+        '<div class="cm-meaning">' + escHtml(w.english || w.meaning || '') + '</div>' +
+        '<div class="cm-grammar">' + escHtml(grammar) + '</div>' +
+      '</div>';
+    }
+  });
+
+  var overlay = document.createElement('div');
+  overlay.className = 'complete-overlay';
+  overlay.id = '_cmOverlay';
+  overlay.innerHTML =
+    '<div class="complete-modal">' +
+      '<div class="cm-title">🎉 回答正确</div>' +
+      '<div class="cm-cards">' + cardsHtml + '</div>' +
+      '<div class="cm-sentence">' + escHtml(q.chinese || '') + '</div>' +
+      '<button class="cm-btn" id="_cmNextBtn">下一题</button>' +
+    '</div>';
+  document.body.appendChild(overlay);
+
+  function nextQuestion() {
+    closeCompleteModal();
+    if (translateIdx < translateEx.length - 1) {
+      translateIdx++; render();
+  
+
+  } else {
+      Swal.fire({icon:'success', title:'全部完成！', text:'所有题目已完成', confirmButtonColor:'#20c997'});
+    }
+  }
+
+  document.getElementById('_cmNextBtn').addEventListener('click', nextQuestion);
+
+  // 空格键触发下一题
+  var spaceHandler = function(e) {
+    if (e.key === ' ' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      document.removeEventListener('keydown', spaceHandler);
+      nextQuestion();
+    }
+  };
+  document.addEventListener('keydown', spaceHandler);
+}
+
+function closeCompleteModal() {
+  var el = document.getElementById('_cmOverlay');
+  if (el) { el.remove(); }
+}
+
+function updateProgress() {
+  var total = translateEx.length, idx = translateIdx + 1, pct = total ? (idx / total * 100) : 0;
+  document.getElementById('listeningProgressText').textContent = idx + '/' + total;
+  document.getElementById('listeningProgressFill').style.width = pct + '%';
+  document.getElementById('listeningCounter').textContent = idx + '/' + total;
+  document.getElementById('listeningBottomFill').style.width = pct + '%';
+  document.getElementById('listeningScore').textContent = '得分: ' + (sessionScore || 0);
+}
+
+var sessionScore = 0, soundCtx = null, typingBuffer = null;
+
+function getAudioCtx() {
+  if (!soundCtx) soundCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (soundCtx.state === 'suspended') soundCtx.resume();
+  if (soundCtx.state === 'interrupted') { soundCtx.close(); soundCtx = null; return getAudioCtx(); }
+  return soundCtx;
+}
+
+function playTypingWav() {
+  try {
+    var ctx = getAudioCtx();
+    if (typingBuffer) {
+      var src = ctx.createBufferSource();
+      src.buffer = typingBuffer;
+      var g = ctx.createGain();
+      g.gain.value = 0.25;
+      src.connect(g).connect(ctx.destination);
+      src.start();
+  
+
+  } else {
+      // 后备：Web Audio 合成
+      var osc = ctx.createOscillator();
+      osc.type = 'sine'; osc.frequency.value = 1500;
+      var g = ctx.createGain();
+      g.gain.setValueAtTime(0.15, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+      osc.connect(g).connect(ctx.destination);
+      osc.start(); osc.stop(ctx.currentTime + 0.08);
+    }
+  } catch(e) {}
+}
+
+function playSound(name) {
+  try {
+    var actx = getAudioCtx();
+    var now = actx.currentTime;
+    if (name === 'error') {
+      var osc = actx.createOscillator();
+      osc.type = 'sawtooth'; osc.frequency.value = 160;
+      var g = actx.createGain();
+      g.gain.setValueAtTime(0.25, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+      osc.connect(g).connect(actx.destination);
+      osc.start(now); osc.stop(now + 0.25);
+    } else if (name === 'complete') {
+      [523, 587, 659, 698, 784].forEach(function(f, i) {
+        var oc = actx.createOscillator();
+        oc.type = 'sine'; oc.frequency.value = f;
+        var gn = actx.createGain();
+        var t0 = now + i * 0.12;
+        gn.gain.setValueAtTime(0.15, t0);
+        gn.gain.exponentialRampToValueAtTime(0.001, t0 + 0.25);
+        oc.connect(gn).connect(actx.destination);
+        oc.start(t0); oc.stop(t0 + 0.25);
+      });
+    }
+  } catch(e) {}
+}
+
+
+function speakWordsSequentially(words, idx) {
+    if (!words || idx >= words.length) return;
+    // 逐词发音：cnchar 库驱动（真人预录音频 mp3），替代 Qwen3 TTS
+    playCncharWord(words[idx], function() {
+        setTimeout(function() {
+            speakWordsSequentially(words, idx + 1);
+        }, 1000);
+    });
+}
+
+function listeningControl(action) {
+  if (action === 'next') {
+    if (translateIdx < translateEx.length - 1) { translateIdx++; render(); }
+    else { Swal.fire({icon:'info', title:'已完成所有题目', confirmButtonColor:'#20c997'}); }
+  } else if (action === 'prev') {
+    if (translateIdx > 0) { translateIdx--; render(); }
+  } else if (action === 'play') {
+    if (translateEx[translateIdx] && translateEx[translateIdx].chinese) {
+      VoicePlayer.startSpectrum('spectrumCanvas');
+      VoicePlayer.speak(translateEx[translateIdx].chinese);
+    }
+  } else if (action === 'word') {
+    var ex = translateEx[translateIdx];
+    if (ex && ex.word_analysis && ex.word_analysis.length) {
+      var wl = ex.word_analysis.map(function(w) { return w.word || ''; }).filter(Boolean);
+      if (wl.length) { speakWordsSequentially(wl, 0); }
+    }
+  }
+}
+
+function showTranslateHelp() {
+  Swal.fire({
+    title: '翻译练习操作说明',
+    html: '<div style="text-align:left;font-size:14px;color:#555;line-height:1.8;"><p style="font-weight:600;color:#2563eb;margin-bottom:10px;font-size:15px;">📖 翻译输入</p><div style="margin-bottom:14px;padding-left:6px;"><div style="margin-bottom:8px;"><span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:#20c997;color:#fff;text-align:center;line-height:24px;font-size:13px;font-weight:600;margin-right:8px;">1</span><strong>阅读英文</strong> — 页面显示英文句子提示，查看图片辅助理解</div><div style="margin-bottom:8px;"><span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:#20c997;color:#fff;text-align:center;line-height:24px;font-size:13px;font-weight:600;margin-right:8px;">2</span><strong>逐词输入</strong> — 在输入框中逐词输入对应的<b>中文翻译</b></div><div style="margin-bottom:8px;"><span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:#20c997;color:#fff;text-align:center;line-height:24px;font-size:13px;font-weight:600;margin-right:8px;">3</span><strong>空格继续</strong> — 按<b>空格键</b>或在弹窗中确认后可继续下一句</div></div><p style="font-weight:600;color:#f57c00;margin-bottom:10px;font-size:15px;">🎯 验证反馈</p><div style="margin-bottom:14px;padding-left:6px;"><div style="margin-bottom:8px;"><span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:#f57c00;color:#fff;text-align:center;line-height:24px;font-size:13px;font-weight:600;margin-right:8px;">4</span><strong>颜色反馈</strong> — 输入正确的词语会变为<b>绿色</b>，错误词语保持<b>红色</b>提示</div><div style="margin-bottom:8px;"><span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:#f57c00;color:#fff;text-align:center;line-height:24px;font-size:13px;font-weight:600;margin-right:8px;">5</span><strong>完成提示</strong> — 完成所有词语输入后自动弹出完成提示</div><div style="margin-bottom:8px;"><span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:#f57c00;color:#fff;text-align:center;line-height:24px;font-size:13px;font-weight:600;margin-right:8px;">6</span><strong>显示控制</strong> — 顶部开关可控制<b>图片</b>和<b>拼音</b>的显示/隐藏</div></div></div>',
+    confirmButtonText: '知道了',
+    confirmButtonColor: '#20c997',
+    width: 480
+  });
+}
+
+
+function toast(msg) {
+  if (msg === '重置进度') {
+    translateIdx = 0; render();
+    Swal.fire({title:'✅ 已重置', text:'已跳转到第一句', timer:1200, showConfirmButton:false, icon:'success'});
+    return;
+  }
+  Swal.fire({title: msg, timer: 800, showConfirmButton: false, icon: 'info'});
+}
+
+function showContentList() {
+  var all = EXERCISES_BY_MODE['translate'] || [];
+  if (!all.length) {
+    Swal.fire({icon:'info', title:'暂无内容', text:'当前模式还没有练习题', confirmButtonColor:'#20c997'});
+    return;
+  }
+  var html = '<div class="content-list">';
+  all.forEach(function(ex, i) {
+    html += '<div class="content-item" onclick="var s=Swal;s.close();translateIdx=' + i + ';render();" style="cursor:pointer;padding:12px 16px;border-bottom:1px solid #f5f5f5;display:flex;gap:12px;align-items:flex-start;">';
+    html += '<div style="width:28px;height:28px;border-radius:50%;background:#20c997;color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;">' + (i+1) + '</div>';
+    html += '<div style="flex:1;"><div style="font-size:17px;font-weight:600;color:#1a1a1a;">' + (ex.chinese || '') + '</div><div style="font-size:13px;color:#999;margin-top:1px;">' + (ex.english || '') + '</div></div>';
+    html += '</div>';
+  });
+  html += '</div>';
+  Swal.fire({title:'本课时句子列表', html:html, showConfirmButton:true, confirmButtonText:'关闭', confirmButtonColor:'#20c997', width:500, padding:'0 0 16px'});
+}
+</script>
+{% endblock %}

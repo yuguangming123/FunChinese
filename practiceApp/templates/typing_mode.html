@@ -1,0 +1,542 @@
+{% extends "pra_base.html" %}{% load static %}
+{% block title %}打字模式-{{ lesson.name }}{% endblock %}
+{% block content %}
+<div class="practice-page"><div class="mode-panel active">
+  <div class="content-area" id="typingContentArea">
+    <div class="typing-toggles">
+      <label class="toggle-switch">
+        <input type="checkbox" id="toggleImage" checked>
+        <span class="toggle-slider"></span>
+        <span class="toggle-label">显示图片</span>
+      </label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="togglePinyin" checked>
+        <span class="toggle-slider"></span>
+        <span class="toggle-label">显示拼音</span>
+      </label>
+      <button class="typing-help-btn" onclick="showTypingHelp()" title="操作帮助"><i class="fas fa-question-circle"></i></button>
+    </div>
+    <div class="sentence-image" id="sentenceImage"></div>
+    <div style="text-align:center;font-size:20px;font-weight:700;color:#20c997;margin:16px 24px 4px;" id="typingEnglish"></div>
+    <div class="word-analysis-display" id="wordAnalysisDisplay"></div>
+    <input type="text" id="typingInput" autocomplete="off" style="position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;">
+  </div>
+</div></div>
+<style>
+.word-analysis-display {
+    display: flex; flex-wrap: wrap; justify-content: center;
+    gap: 8px 12px; padding: 24px 24px; margin: 8px 0 0;
+    background: #f8f9fb; min-height: 120px; align-items: center;
+}
+.word-box {
+    display: inline-block; padding: 6px 4px;
+    font-size: 30px; font-weight: 700; letter-spacing: 2px;
+    border-radius: 4px; background: transparent; user-select: none;
+}
+.word-display {
+    position: relative; white-space: nowrap; line-height: 1.6;
+}
+.wd-typed { color: #2563eb; }
+.wd-remaining { color: #d1d5db; }
+
+.wd-pinyin {
+    display: block;
+    text-align: center;
+    font-size: 16px;
+    font-weight: 400;
+    color: #f57c00;
+    line-height: 1.4;
+    min-height: 1.4em;
+    letter-spacing: 1px;
+}
+
+/* 光标：与当前词同宽，在词语正下方闪烁 */
+.wd-cursor {
+    display: none;
+    position: absolute;
+    bottom: -3px;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background: #22c55e;
+    border-radius: 2px;
+    animation: cursorBlink 0.6s step-end infinite;
+}
+.word-box.current .wd-cursor { display: block; }
+
+.word-box.done .wd-remaining { color: #2563eb; }
+
+/* 空格模糊切换：仅模糊未输入的灰色词，已完成的词（.done）不受影响，拼音和光标不受影响 */
+.blur-mode .word-box:not(.done) .wd-remaining { filter: blur(8px); transition: filter 0.2s; }
+
+.word-box.error {
+    animation: errorShake 0.3s;
+    border: 2px solid #ef4444;
+}
+
+/* 标点词：置于右下方，无拼音、无光标、无交互 */
+.word-box.punct-word {
+    padding: 0 2px !important;
+    font-size: 30px;
+    font-weight: 700;
+    color: #1a1a1a;
+    background: transparent !important;
+    border: none !important;
+    pointer-events: none;
+    user-select: none;
+    align-self: flex-end;
+}
+
+@keyframes cursorBlink { 50% { opacity: 0; } }
+@keyframes errorShake {
+    0%,100% { transform: translateX(0); }
+    20% { transform: translateX(-4px); }
+    40% { transform: translateX(4px); }
+    60% { transform: translateX(-3px); }
+    80% { transform: translateX(3px); }
+}
+</style>
+{% endblock %}
+{% block extra_js %}
+<script>
+const EXERCISES_BY_MODE = {{ exercises_by_mode_json|safe }};
+let sessionId = null, typingEx = [], typingIdx = 0;
+let sessionScore = 0, sessionCorrect = 0, sessionWrong = 0;
+let words = [], wordIdx = 0, typed = '', isComposing = false;
+
+// 判断是否为标点
+function isPunctWord(w) {
+    return w && !w.pinyin && !w.pos && !w.grammar;
+}
+
+function startNewSession(mode) {
+  fetch('{% url "practiceApp:start_session" %}', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+    body: JSON.stringify({lesson_id: {{ lesson.id }}, mode: mode, exercises: EXERCISES_BY_MODE[mode] || []})
+  }).then(function(r){ return r.json(); }).then(function(data){ sessionId = data.session_id; });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  typingEx = EXERCISES_BY_MODE['typing'] || [];
+  if (!typingEx.length) return;
+
+  // 开关初始化
+  function applyToggle(cls, show) {
+    document.querySelectorAll('.' + cls).forEach(function(el) {
+      el.classList.toggle('hidden', !show);
+    });
+  }
+  function initToggle(id, cls) {
+    var cb = document.getElementById(id);
+    var saved = localStorage.getItem('typing_' + id);
+    if (saved === '0') { cb.checked = false; applyToggle(cls, false); }
+    cb.addEventListener('change', function() {
+      var on = cb.checked;
+      localStorage.setItem('typing_' + id, on ? '1' : '0');
+      applyToggle(cls, on);
+    });
+  }
+  initToggle('toggleImage', 'sentence-image');
+  initToggle('togglePinyin', 'wd-pinyin');
+
+  // 逐词发音：点击词块用 cnchar 库朗读该词（真人预录音频 mp3）
+  document.getElementById('wordAnalysisDisplay').addEventListener('click', function(e) {
+    var box = e.target.closest('.word-box');
+    if (box && !box.classList.contains('punct-word')) {
+      var w = words && words[Array.prototype.indexOf.call(box.parentNode.children, box)];
+      if (w && w.word) playCncharWord(w.word);
+    }
+  });
+
+  render();
+  startNewSession('typing');
+  var inp = document.getElementById('typingInput');
+  inp.addEventListener('compositionstart', function(){
+    isComposing = true;
+    // 组合开始前保存当前已输入字符（因为 IME 会清空输入框）
+    inp._savedTyped = typed;
+  });
+  inp.addEventListener('compositionend', function(){
+    isComposing = false;
+    if (inp.value) playTypingWav();
+    // IME 输出追加到之前保存的字符上
+    typed = (inp._savedTyped || '') + inp.value;
+    inp.value = '';
+    inp._savedTyped = '';
+    processTyped();
+  });
+  inp.addEventListener('input', function(e){
+    // 组合中不处理；已经有内容则追加（防重复）
+    if (isComposing || e.isComposing) return;
+    if (inp.value) {
+      // 避免 compositionend 后 input 再次带上相同内容
+      if (typed.slice(-inp.value.length) === inp.value) {
+        inp.value = '';
+        return;
+      }
+      playSound('typing');
+      typed += inp.value;
+      inp.value = '';
+      processTyped();
+    }
+  });
+  document.addEventListener('keydown', function(e) {
+    // 首次按键初始化音频上下文（用户手势后浏览器才允许发声）
+    if (!soundCtx) soundCtx = new (window.AudioContext || window.webkitAudioContext)();
+    // 非输入法状态下按空格 → 切换模糊/清晰（不插入空格字符）
+    if (e.key === ' ' && !isComposing) {
+      e.preventDefault();
+      document.getElementById('wordAnalysisDisplay').classList.toggle('blur-mode');
+      return;
+    }
+    // 敲击键盘音效：用预加载的 typing.wav AudioBuffer 播放
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && e.repeat === false) {
+      playTypingWav();
+    }
+    if (isComposing) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (document.activeElement !== inp) inp.focus();
+  });
+  // 预加载 typing.wav
+  fetch('{% static "sound/typing.wav" %}')
+    .then(function(r){ return r.arrayBuffer(); })
+    .then(function(buf){
+      getAudioCtx().decodeAudioData(buf, function(b){ typingBuffer = b; });
+    });
+
+  setTimeout(function(){ inp.focus(); }, 100);
+  updateProgress();
+});
+
+function render() {
+  if (!typingEx.length) return;
+  var q = typingEx[typingIdx];
+  words = q.word_analysis || [];
+  wordIdx = 0; typed = ''; sessionScore = 0;
+
+  var imgC = document.getElementById('sentenceImage');
+  imgC.innerHTML = q.image_url
+    ? '<img src="' + q.image_url + '" alt="sentence">'
+    : '<div class="placeholder"><i class="fas fa-image"></i></div>';
+
+  document.getElementById('typingEnglish').textContent = q.english || '';
+
+  var display = document.getElementById('wordAnalysisDisplay');
+  if (words.length) {
+    display.innerHTML = words.map(function(w, i) {
+      var punct = isPunctWord(w);
+      var cls = 'word-box';
+      if (i === wordIdx && !punct) cls += ' current';
+      if (punct) cls += ' punct-word';
+      var word = escHtml(w.word || '');
+      var pinyin = escHtml(w.pinyin || '');
+      if (punct) {
+        return '<span class="' + cls + '">' +
+          '<span class="word-display">' +
+            '<span class="wd-remaining">' + word + '</span>' +
+          '</span>' +
+        '</span>';
+      }
+      return '<span class="' + cls + '">' +
+        '<span class="wd-pinyin">' + pinyin + '</span>' +
+        '<span class="word-display">' +
+          '<span class="wd-typed"></span>' +
+          '<span class="wd-remaining">' + word + '</span>' +
+          '<span class="wd-cursor"></span>' +
+        '</span>' +
+      '</span>';
+    }).join('');
+  } else {
+    display.innerHTML = '<div style="color:#ccc;padding:40px;">暂无词语</div>';
+    return;
+  }
+  document.getElementById('typingInput').value = '';
+  updateProgress();
+  repositionInput();
+  // 自动朗读中文句子
+  if (q.chinese && localStorage.getItem('qwen3_auto_read') !== '0') {
+    setTimeout(function() {
+      VoicePlayer.startSpectrum('spectrumCanvas');
+      VoicePlayer.speak(q.chinese);
+    }, 300);
+  }
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ===== 逐词比对逻辑（标点自动跳过）=====
+function processTyped() {
+  if (!words.length || wordIdx >= words.length) return;
+
+  // 自动跳过标点词（不参与打字比对）
+  while (wordIdx < words.length && isPunctWord(words[wordIdx])) {
+    var bx = document.querySelectorAll('.word-box');
+    if (bx[wordIdx]) bx[wordIdx].classList.add('done');
+    wordIdx++;
+  }
+  if (wordIdx >= words.length) {
+    sessionCorrect++;
+    sessionScore += 10;
+    updateProgress();
+    playSound('complete');
+    setTimeout(function() {
+      if (typingIdx < typingEx.length - 1) {
+        Swal.fire({icon:'success', title:'太棒了！', text:'即将进入下一题', timer:1200, showConfirmButton:false, timerProgressBar:true});
+        setTimeout(function(){ typingIdx++; render(); }, 1300);
+      } else {
+        Swal.fire({icon:'success', title:'全部完成！', text:'所有题目已完成', confirmButtonColor:'#20c997'});
+      }
+    }, 200);
+    return;
+  }
+
+  updateWordDisplay();
+  var targetWord = words[wordIdx].word;
+
+  if (typed.length < targetWord.length) return;  // 还没打满
+
+  // 只取当前词长度做比对（多余字符留给下一个词）
+  var toCheck = typed.slice(0, targetWord.length);
+
+  if (toCheck === targetWord) {
+    typed = typed.slice(targetWord.length);  // 剩余字符留给后续
+    markWordDone();
+    wordIdx++;
+
+    if (wordIdx >= words.length) {
+      sessionCorrect++;
+      sessionScore += 10;
+      updateProgress();
+      playSound('complete');
+      setTimeout(function() {
+        if (typingIdx < typingEx.length - 1) {
+          Swal.fire({icon:'success', title:'太棒了！', text:'即将进入下一题', timer:1200, showConfirmButton:false, timerProgressBar:true});
+          setTimeout(function(){ typingIdx++; render(); }, 1300);
+        } else {
+          Swal.fire({icon:'success', title:'全部完成！', text:'所有题目已完成', confirmButtonColor:'#20c997'});
+        }
+      }, 200);
+      return;
+    }
+
+    playSound('word-success');
+    // 递归处理下一个词
+    processTyped();
+  } else {
+    playSound('error');
+    sessionWrong++;
+    var boxes = document.querySelectorAll('.word-box');
+    if (boxes[wordIdx]) {
+      boxes[wordIdx].classList.add('error');
+      var self = boxes[wordIdx];
+      setTimeout(function(){ self.classList.remove('error'); }, 400);
+    }
+    typed = '';
+    updateWordDisplay();
+    updateProgress();
+  }
+}
+
+function updateWordDisplay() {
+  var boxes = document.querySelectorAll('.word-box');
+  for (var i = 0; i < boxes.length; i++) {
+    var typedEl = boxes[i].querySelector('.wd-typed');
+    var remainEl = boxes[i].querySelector('.wd-remaining');
+    var word = words[i] ? words[i].word : '';
+    if (!remainEl) continue;  // 标点词无 wd-typed
+    if (i < wordIdx) {
+      if (typedEl) typedEl.textContent = '';
+      remainEl.textContent = word;
+    } else if (i === wordIdx) {
+      if (typedEl) typedEl.textContent = typed;
+      remainEl.textContent = word.slice(typed.length);
+    } else {
+      if (typedEl) typedEl.textContent = '';
+      remainEl.textContent = word;
+    }
+  }
+  repositionInput();
+}
+
+function repositionInput() {
+  var boxes = document.querySelectorAll('.word-box');
+  var inp = document.getElementById('typingInput');
+  if (!inp || !boxes.length) return;
+  var idx = Math.min(wordIdx, boxes.length - 1);
+  var rect = boxes[idx].getBoundingClientRect();
+  inp.style.left = rect.left + 'px';
+  inp.style.top = (rect.bottom + 4) + 'px';
+}
+
+function markWordDone() {
+  var boxes = document.querySelectorAll('.word-box');
+  if (boxes[wordIdx]) {
+    boxes[wordIdx].classList.remove('current', 'error');
+    boxes[wordIdx].classList.add('done');
+    // 跳过标点，将光标移到下一个非标点词
+    for (var n = wordIdx + 1; n < boxes.length; n++) {
+      if (!isPunctWord(words[n])) {
+        boxes[n].classList.add('current');
+        break;
+      }
+    }
+  }
+}
+
+function updateProgress() {
+  var total = typingEx.length, idx = typingIdx + 1, pct = total ? (idx / total * 100) : 0;
+  document.getElementById('listeningProgressText').textContent = idx + '/' + total;
+  document.getElementById('listeningProgressFill').style.width = pct + '%';
+  document.getElementById('listeningCounter').textContent = idx + '/' + total;
+  document.getElementById('listeningBottomFill').style.width = pct + '%';
+  document.getElementById('listeningScore').textContent = '得分: ' + sessionScore;
+}
+
+var soundCtx = null;
+var typingBuffer = null;
+
+function getAudioCtx() {
+  if (!soundCtx) soundCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (soundCtx.state === 'suspended') soundCtx.resume();
+  if (soundCtx.state === 'interrupted') { soundCtx.close(); soundCtx = null; return getAudioCtx(); }
+  return soundCtx;
+}
+
+function playTypingWav() {
+  if (typingBuffer) {
+    var ctx = getAudioCtx();
+    var src = ctx.createBufferSource();
+    src.buffer = typingBuffer;
+    var g = ctx.createGain();
+    g.gain.value = 0.25;
+    src.connect(g).connect(ctx.destination);
+    src.start();
+  } else {
+    playSound('typing');
+  }
+}
+
+function playSound(name) {
+  try {
+    var actx = getAudioCtx();
+    var now = actx.currentTime;
+
+    if (name === 'error') {
+      var osc = actx.createOscillator();
+      osc.type = 'sawtooth'; osc.frequency.value = 160;
+      var g = actx.createGain();
+      g.gain.setValueAtTime(0.25, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+      osc.connect(g).connect(actx.destination);
+      osc.start(now); osc.stop(now + 0.25);
+    } else if (name === 'word-success') {
+      var osc2 = actx.createOscillator();
+      osc2.type = 'sine'; osc2.frequency.value = 880;
+      var g2 = actx.createGain();
+      g2.gain.setValueAtTime(0.18, now); g2.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+      osc2.connect(g2).connect(actx.destination);
+      osc2.start(now); osc2.stop(now + 0.2);
+    } else if (name === 'typing') {
+      var osc3 = actx.createOscillator();
+      osc3.type = 'sine'; osc3.frequency.value = 1500;
+      var g3 = actx.createGain();
+      g3.gain.setValueAtTime(0.2, now); g3.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+      osc3.connect(g3).connect(actx.destination);
+      osc3.start(now); osc3.stop(now + 0.1);
+    } else if (name === 'complete') {
+      // C-D-E-F-G 五音上行音阶
+      [523, 587, 659, 698, 784].forEach(function(f, i) {
+        var oc = actx.createOscillator();
+        oc.type = 'sine'; oc.frequency.value = f;
+        var gn = actx.createGain();
+        var t0 = now + i * 0.12;
+        gn.gain.setValueAtTime(0.15, t0);
+        gn.gain.exponentialRampToValueAtTime(0.001, t0 + 0.25);
+        oc.connect(gn).connect(actx.destination);
+        oc.start(t0); oc.stop(t0 + 0.25);
+      });
+    }
+  } catch(e) {}
+}
+function toast(msg) {
+  if (msg === '重置进度') {
+    typingIdx = 0; render();
+    Swal.fire({title:'✅ 已重置', text:'已跳转到第一句', timer:1200, showConfirmButton:false, icon:'success'});
+    return;
+  }
+  Swal.fire({title: msg, timer: 800, showConfirmButton: false, icon: 'info'});
+}
+
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(function(){});
+  } else {
+    document.exitFullscreen().catch(function(){});
+  }
+}
+
+function showContentList() {
+  var all = EXERCISES_BY_MODE['typing'] || [];
+  if (!all.length) {
+    Swal.fire({icon:'info', title:'暂无内容', text:'当前模式还没有练习题', confirmButtonColor:'#20c997'});
+    return;
+  }
+  var html = '<div class="content-list">';
+  all.forEach(function(ex, i) {
+    html += '<div class="content-item" onclick="var s=Swal;s.close();typingIdx=' + i + ';render();" style="cursor:pointer;padding:12px 16px;border-bottom:1px solid #f5f5f5;display:flex;gap:12px;align-items:flex-start;">';
+    html += '<div style="width:28px;height:28px;border-radius:50%;background:#20c997;color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;">' + (i+1) + '</div>';
+    html += '<div style="flex:1;"><div style="font-size:17px;font-weight:600;color:#1a1a1a;">' + (ex.chinese || '') + '</div><div style="font-size:13px;color:#999;margin-top:1px;">' + (ex.english || '') + '</div></div>';
+    html += '</div>';
+  });
+  html += '</div>';
+  Swal.fire({title:'本课时句子列表', html:html, showConfirmButton:true, confirmButtonText:'关闭', confirmButtonColor:'#20c997', width:500, padding:'0 0 16px'});
+}
+
+// Qwen3-TTS 音色列表
+;
+
+function listeningControl(action) {
+  if (action === 'next') {
+    if (typingIdx < typingEx.length - 1) { typingIdx++; render(); }
+    else { Swal.fire({icon:'info', title:'已完成所有题目', confirmButtonColor:'#20c997'}); }
+  } else if (action === 'prev') {
+    if (typingIdx > 0) { typingIdx--; render(); }
+  } else if (action === 'play') {
+    if (typingEx[typingIdx] && typingEx[typingIdx].chinese) {
+      VoicePlayer.startSpectrum('spectrumCanvas');
+      VoicePlayer.speak(typingEx[typingIdx].chinese);
+    }
+  } else if (action === 'word') {
+    // 逐词发音：cnchar 库驱动逐个朗读当前句子的词
+    var ex = typingEx[typingIdx];
+    if (ex && ex.word_analysis && ex.word_analysis.length) {
+      var wl = ex.word_analysis.map(function(w) { return w.word || ''; }).filter(Boolean);
+      if (wl.length) typingSpeakWords(wl, 0);
+    }
+  } else {
+    toast('此功能在打字模式下暂不可用');
+  }
+}
+
+// 逐词顺序连播（cnchar 库驱动，真人预录音频 mp3）
+function typingSpeakWords(list, i) {
+  if (!list || i >= list.length) return;
+  playCncharWord(list[i], function() {
+    setTimeout(function() { typingSpeakWords(list, i + 1); }, 800);
+  });
+}
+
+function showTypingHelp() {
+  Swal.fire({
+    title: '打字练习操作说明',
+    html: '<div style="text-align:left;font-size:14px;color:#555;line-height:1.8;"><p style="font-weight:600;color:#2563eb;margin-bottom:10px;font-size:15px;">📝 打字输入</p><div style="margin-bottom:14px;padding-left:6px;"><div style="margin-bottom:8px;"><span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:#20c997;color:#fff;text-align:center;line-height:24px;font-size:13px;font-weight:600;margin-right:8px;">1</span><strong>查看句子</strong> — 页面显示当前句子的中文和拼音，输入框中等待输入</div><div style="margin-bottom:8px;"><span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:#20c997;color:#fff;text-align:center;line-height:24px;font-size:13px;font-weight:600;margin-right:8px;">2</span><strong>输入法输入</strong> — 使用<b>输入法（IME）</b>在输入框中依次输入每个词语</div><div style="margin-bottom:8px;"><span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:#20c997;color:#fff;text-align:center;line-height:24px;font-size:13px;font-weight:600;margin-right:8px;">3</span><strong>自动对比</strong> — 输入正确后系统自动<b>比对</b>并进入下一个词语</div><div style="margin-bottom:8px;"><span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:#20c997;color:#fff;text-align:center;line-height:24px;font-size:13px;font-weight:600;margin-right:8px;">4</span><strong>空格切换</strong> — 按<b>空格键</b>可在模糊显示与清晰显示之间切换</div></div><p style="font-weight:600;color:#f57c00;margin-bottom:10px;font-size:15px;">🎯 验证反馈</p><div style="margin-bottom:14px;padding-left:6px;"><div style="margin-bottom:8px;"><span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:#f57c00;color:#fff;text-align:center;line-height:24px;font-size:13px;font-weight:600;margin-right:8px;">5</span><strong>显示控制</strong> — 顶部开关可独立控制<b>图片</b>和<b>拼音</b>的显示/隐藏</div><div style="margin-bottom:8px;"><span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:#f57c00;color:#fff;text-align:center;line-height:24px;font-size:13px;font-weight:600;margin-right:8px;">6</span><strong>完成音效</strong> — 输入完整句后自动播放完成音效并进入下一句</div><div style="margin-bottom:8px;"><span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:#f57c00;color:#fff;text-align:center;line-height:24px;font-size:13px;font-weight:600;margin-right:8px;">7</span><strong>进度追踪</strong> — 通过底部进度条了解当前学习进度</div></div></div>',
+    confirmButtonText: '知道了',
+    confirmButtonColor: '#20c997',
+    width: 480
+  });
+}
+
+</script>
+{% endblock %}

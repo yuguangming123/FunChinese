@@ -1,0 +1,55 @@
+/*设置页脚样式*/
+.web-footer{
+    width: 100%;
+    margin-top: 30px;
+}
+#map-footer{
+    background-color: #3a3a3a;
+}
+#map-footer dl{
+    text-align:left;
+    margin-top: 40px;
+    margin-left: 40px;
+}
+#map-footer dt{
+    padding: 3px;
+    color: #fff;
+}
+#map-footer dd{
+    padding: 3px;
+}
+#map-footer a{
+    color: #969696;
+    font-size: 13px;
+    text-decoration: none;
+}
+
+/*设置广告文字样式*/
+#map-footer p{
+    margin-top: 20px;
+    margin-bottom: 10px;
+    color: #fff;
+    font-size: 16px;
+}
+#map-footer a:hover{
+    color: #fff;
+    text-decoration: none;
+}
+#wx{
+    text-align: center;
+}
+.qrimg{
+    max-width: 170px;
+}
+
+/*设置版权信息*/
+#patent-footer{
+    text-align: center;
+    background: #3a3a3a;
+}
+#patent-footer p{
+    margin-top: 10px;
+    scroll-padding-right: 80px;
+    color: #8d8d8d;
+    font-size: 12px;
+}

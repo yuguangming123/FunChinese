@@ -1,0 +1,43 @@
+/*共用样式表*/
+.table-responsive table{
+    text-align: center;
+    font-size: 14px;
+}
+
+/*设置所有表格垂直居中*/
+table tr td{
+    vertical-align: middle;
+}
+/*设置表格横向滚动*/
+.table-responsive table td{
+    line-height: 28px;
+}
+.table-responsive table th,
+.table-responsive table td{
+    word-wrap: break-word;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/*设置表格首尾列冻结*/
+.table-responsive {
+  position: relative;
+}
+.fixed-column{
+    position: sticky;
+    background-color: #fff; /* 可能需要设置背景色以匹配表格的其余部分 */
+    z-index: 10; /* 确保固定在顶部的列不会被其他内容覆盖 */
+}
+.table-responsive .table thead th:last-child,
+.table-responsive .table tbody td:last-child{
+    right: 0;
+    width: 10px;
+}
+.table-responsive .table thead th:first-child,
+.table-responsive .table tbody td:first-child{
+    left: 0;
+}
+.table-responsive .table thead th:nth-child(2),
+.table-responsive .table tbody td:nth-child(2){
+    left: 30px;
+}

@@ -1,0 +1,13 @@
+/*设置左边菜单宽度固定，右边内容自适应宽度*/
+.fixed-sidebar{
+    position: sticky;
+    top: 0;
+    flex: 0 0 auto;
+}
+.main-body{
+    display: flex;
+}
+.main-content{
+    flex-grow: 1;
+    overflow: hidden;
+}

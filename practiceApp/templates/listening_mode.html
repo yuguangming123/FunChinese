@@ -1,0 +1,380 @@
+{% extends "pra_base.html" %}
+{% load static %}
+{% block title %}听力模式-{{ lesson.name }}{% endblock %}
+{% block content %}
+<div class="practice-page">
+  <!-- ===== 听力模式（带顶部栏+底部控制） ===== -->
+  <div class="mode-panel active" id="panel-listening">
+    <!-- 听力内容区 -->
+    <div class="content-area" id="listeningContent">
+      <div class="listening-toggles">
+        <label class="toggle-switch">
+          <input type="checkbox" id="toggleImage" checked>
+          <span class="toggle-slider"></span>
+          <span class="toggle-label">显示图片</span>
+        </label>
+        <label class="toggle-switch">
+          <input type="checkbox" id="togglePinyin" checked>
+          <span class="toggle-slider"></span>
+          <span class="toggle-label">显示拼音</span>
+        </label>
+      <button class="listening-help-btn" onclick="showListeningHelp()" title="操作帮助"><i class="fas fa-question-circle"></i></button>
+      </div>
+      <div class="sentence-image" id="sentenceImage"></div>
+      <div class="analysis-panel" id="analysisPanel"></div>
+      <div class="full-sentence" id="fullSentence"></div>
+      <div class="grammar-hint-wrap">
+        <button class="grammar-hint-btn" id="grammarHintBtn"><i class="fas fa-lightbulb"></i> 句子解析</button>
+        <div class="grammar-tooltip" id="grammarTooltip"></div>
+      </div>
+      <div class="record-section" style="margin-top:24px;">
+        <button class="record-btn-main" onclick="openRecordingModal()"><i class="fas fa-microphone"></i></button>
+        <div class="record-label">口语测评</div>
+        </div>
+      </div>
+
+  </div>
+</div>
+
+<!-- 隐藏字段 -->
+<input type="hidden" id="lessonId" value="{{ lesson.id }}">
+<input type="hidden" id="courseUrl" value="{% url 'courseApp:course_detail' course.id %}">
+<script src="{% static 'plugins/bootstrap-5.3.2/js/bootstrap.bundle.min.js' %}"></script>
+<script>
+// ===== 全局数据 =====
+const EXERCISES_BY_MODE = {{ exercises_by_mode_json|safe }};
+let sessionId = null;
+let currentMode = '{{ initial_mode }}';
+
+// ===== 听力模式状态 =====
+let listeningExercises = [];
+let listeningIndex = 0;
+let listeningAnswered = false;
+let isLooping = false;
+let sessionScore = 0;
+let sessionCorrect = 0;
+let sessionWrong = 0;
+
+// ===== 初始化 =====
+document.addEventListener('DOMContentLoaded', function() {
+    listeningExercises = EXERCISES_BY_MODE[currentMode] || [];
+
+    // 开关初始化
+    (function(){
+        function apply(cls, show){ document.querySelectorAll('.'+cls).forEach(function(e){e.classList.toggle('hidden',!show);}); }
+        function init(id, cls){
+            var cb=document.getElementById(id);
+            var saved=localStorage.getItem('listen_'+id);
+            if(saved==='0'){cb.checked=false;apply(cls,false);}
+            cb.addEventListener('change',function(){var on=cb.checked;localStorage.setItem('listen_'+id,on?'1':'0');apply(cls,on);});
+        }
+        init('toggleImage','sentence-image');
+        init('togglePinyin','aw-pinyin');
+    })();
+    renderListeningQuestion();
+    startNewSession(currentMode);
+    // 启动频谱（初始静止状态显示空频谱）
+    setTimeout(function() {
+        VoicePlayer.startSpectrum('spectrumCanvas');
+    }, 500);
+});
+
+// ===== 新会话 =====
+function startNewSession(mode) {
+    const exercises = EXERCISES_BY_MODE[mode] || [];
+    fetch('{% url "practiceApp:start_session" %}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+        body: JSON.stringify({lesson_id: {{ lesson.id }}, mode: mode, exercises: exercises})
+    }).then(r => r.json()).then(data => { sessionId = data.session_id; });
+}
+
+// ===== 听力：渲染题目 =====
+function renderListeningQuestion() {
+    if (!listeningExercises.length) {
+        document.getElementById('listeningContent').innerHTML = '<div style="text-align:center;padding:60px;color:#ccc;"><i class="fas fa-book-open" style="font-size:48px;display:block;margin-bottom:12px;"></i>暂无听力题目</div>';
+        return;
+    }
+    const q = listeningExercises[listeningIndex];
+    listeningAnswered = false;
+    updateListeningProgress();
+
+    // 图片
+    const imgContainer = document.getElementById('sentenceImage');
+    if (q.image_url) {
+        imgContainer.innerHTML = `<img src="${q.image_url}" alt="sentence">`;
+    } else {
+        imgContainer.innerHTML = `<div class="placeholder"><i class="fas fa-image"></i></div>`;
+    }
+
+    // 句子分析（卡片式逐词展示）
+    const analysis = document.getElementById('analysisPanel');
+    let groups = '';
+    if (q.word_analysis && q.word_analysis.length) {
+        q.word_analysis.forEach(w => {
+            // 判断是否为标点：无拼音、无词性、无语法成分
+            const isPunct = !w.pinyin && !w.pos && !w.grammar;
+            if (isPunct) {
+                groups += `
+                    <div class="analysis-word-group analysis-punct-group">
+                        <div class="analysis-punct">${w.word || ''}</div>
+                    </div>`;
+            } else {
+                groups += `
+                    <div class="analysis-word-group">
+                        <div class="analysis-word-card ${cardGrammarClass(w.grammar)}">
+                            <div class="aw-pinyin">${w.pinyin || ''}</div>
+                            <div class="aw-word">${w.word || ''}</div>
+                            <div class="aw-meaning">${w.meaning || ''}</div>
+                            <div class="aw-grammar ${grammarClass(w.grammar)}">${w.grammar || '非'}</div>
+                        </div>
+                        <div class="analysis-pos-card">${w.pos || ''}</div>
+                    </div>`;
+            }
+        });
+    }
+    analysis.innerHTML = `
+        <div class="analysis-groups">${groups}</div>
+    `;
+
+    // 完整句子 + 英语翻译
+    document.getElementById('fullSentence').innerHTML = `
+        <div class="sentence-pinyin">${q.pinyin || ''}</div>
+        <div class="sentence-text">${q.chinese || ''}</div>
+        <div class="sentence-english">${q.english || ''}</div>
+    `;
+
+    // 语法提示
+    document.getElementById('grammarTooltip').textContent = q.grammar_hint || '暂无解析';
+
+    // 自动朗读
+    var autoReadEnabled = localStorage.getItem('qwen3_auto_read') !== '0';
+    if (q.chinese && VoicePlayer.autoPlay && autoReadEnabled) {
+        setTimeout(function() {
+            VoicePlayer.startSpectrum('spectrumCanvas');
+            VoicePlayer.speak(q.chinese);
+        }, 300);
+    }
+}
+
+// ===== 听力：进度更新 =====
+function updateListeningProgress() {
+    const total = listeningExercises.length;
+    const idx = listeningIndex + 1;
+    const pct = total ? (idx / total * 100) : 0;
+    document.getElementById('listeningProgressText').textContent = `${idx}/${total}`;
+    document.getElementById('listeningProgressFill').style.width = pct + '%';
+    document.getElementById('listeningCounter').textContent = `${idx}/${total}`;
+    document.getElementById('listeningBottomFill').style.width = pct + '%';
+    document.getElementById('listeningScore').textContent = `得分: ${sessionScore}`;
+}
+
+// ===== 听力：7个控制按钮 =====
+function listeningControl(action) {
+    const total = listeningExercises.length;
+    if (!total) return;
+
+    switch(action) {
+        case 'prev':
+            listeningIndex = Math.max(0, listeningIndex - 1);
+            break;
+        case 'next':
+            if (listeningIndex < total - 1) listeningIndex++;
+            break;
+        case 'play':
+            var q = listeningExercises[listeningIndex];
+            if (q && q.chinese) {
+                VoicePlayer.startSpectrum('spectrumCanvas');
+                VoicePlayer.speak(q.chinese, { onEnd: function() {} });
+            }
+            return;
+        case 'word':
+            // 逐词朗读：取当前句子的 word_analysis，cnchar 库驱动逐个朗读
+            var q2 = listeningExercises[listeningIndex];
+            if (q2 && q2.word_analysis && q2.word_analysis.length) {
+                var words = q2.word_analysis.map(function(w) { return w.word || ''; }).filter(Boolean);
+                if (words.length) listenSpeakWords(words, 0);
+            }
+            return;
+        case 'mastered':
+            toast('标记为已掌握');
+            return;
+        case 'unfamiliar':
+            toast('标记为不熟悉');
+            return;
+    }
+    renderListeningQuestion();
+}
+
+// 逐词顺序连播（cnchar 库驱动，真人预录音频 mp3），替代 Qwen3 TTS 整串朗读
+function listenSpeakWords(words, idx) {
+    if (!words || idx >= words.length) return;
+    playCncharWord(words[idx], function() {
+        setTimeout(function() { listenSpeakWords(words, idx + 1); }, 800);
+    });
+}
+
+function playAudio() {
+    const q = listeningExercises[listeningIndex];
+    if (q.audio_url) {
+        const audio = new Audio(q.audio_url);
+        audio.play().catch(() => {
+            // Audio play fallback - just show toast
+        });
+    }
+}
+
+function shuffleArray(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+}
+
+// ===== 录音弹窗 =====
+function openRecordingModal() {
+    const q = listeningExercises[listeningIndex] || {};
+    let isRecActive = false;
+    let recTimer = null;
+
+    Swal.fire({
+        title: '录音',
+        html: `
+            <div class="recording-modal-content">
+                <div class="big-mic" id="recMicBtn"><i class="fas fa-microphone"></i></div>
+                <div class="rec-status" id="recStatus">点击麦克风开始录音</div>
+                <div class="audio-play-row">
+                    <div class="audio-play-item">
+                        <button onclick="playAudio()"><i class="fas fa-volume-up"></i></button>
+                        <span class="alabel">原音</span>
+                    </div>
+                    <div class="audio-play-item">
+                        <button id="playMyRecBtn" disabled><i class="fas fa-user"></i></button>
+                        <span class="alabel">我的</span>
+                    </div>
+                </div>
+                <div class="rec-actions">
+                    <button class="btn-retry-rec" id="retryRecBtn">重新录音</button>
+                    <button class="btn-submit-rec" id="submitRecBtn" onclick="submitRecording()">提交答案</button>
+                </div>
+            </div>
+        `,
+        showConfirmButton: false,
+        showCloseButton: true,
+        width: 400,
+        didOpen: () => {
+            const micBtn = document.getElementById('recMicBtn');
+            const status = document.getElementById('recStatus');
+            const retryBtn = document.getElementById('retryRecBtn');
+
+            micBtn.addEventListener('click', function() {
+                isRecActive = !isRecActive;
+                this.classList.toggle('active', isRecActive);
+                status.textContent = isRecActive ? '录音中...' : '录音完成！';
+                if (isRecActive) {
+                    document.getElementById('playMyRecBtn').disabled = false;
+                    clearTimeout(recTimer);
+                    recTimer = setTimeout(() => {
+                        isRecActive = false;
+                        micBtn.classList.remove('active');
+                        status.textContent = '录音完成！';
+                    }, 3000);
+                } else {
+                    clearTimeout(recTimer);
+                }
+            });
+
+            retryBtn.addEventListener('click', function() {
+                isRecActive = false;
+                micBtn.classList.remove('active');
+                status.textContent = '点击麦克风开始录音';
+                document.getElementById('playMyRecBtn').disabled = true;
+            });
+        }
+    });
+}
+
+function submitRecording() {
+    sessionScore = Math.min(100, sessionScore + 10);
+    updateListeningProgress();
+    Swal.fire({icon:'success', title:'录音提交成功', timer:1000, showConfirmButton:false});
+}
+
+// ===== 工具函数 =====
+function grammarClass(grammar) {
+    if (!grammar) return 'grammar-empty';
+    if (grammar.includes('主语')) return 'grammar-subject';
+    if (grammar.includes('谓语') || grammar.includes('述语')) return 'grammar-predicate';
+    if (grammar.includes('宾语')) return 'grammar-object';
+    if (grammar.includes('定语')) return 'grammar-attributive';
+    if (grammar.includes('状语') || grammar.includes('介词')) return 'grammar-adverbial';
+    if (grammar.includes('补语')) return 'grammar-complement';
+    if (grammar.includes('兼语')) return 'grammar-predicate';
+    if (grammar.includes('插入')) return 'grammar-adverbial';
+    return '';
+}
+
+function cardGrammarClass(grammar) {
+    if (!grammar) return 'card-empty';
+    if (grammar.includes('主语')) return 'card-subject';
+    if (grammar.includes('谓语') || grammar.includes('述语')) return 'card-predicate';
+    if (grammar.includes('宾语')) return 'card-object';
+    if (grammar.includes('定语')) return 'card-attributive';
+    if (grammar.includes('状语') || grammar.includes('介词')) return 'card-adverbial';
+    if (grammar.includes('补语')) return 'card-complement';
+    if (grammar.includes('兼语')) return 'card-predicate';
+    if (grammar.includes('插入')) return 'card-adverbial';
+    return '';
+}
+
+function toast(msg) {
+  if (msg === '重置进度') {
+    listeningIndex = 0; listeningAnswered = false; renderListeningQuestion();
+    Swal.fire({title:'✅ 已重置', text:'已跳转到第一句', timer:1200, showConfirmButton:false, icon:'success'});
+    return;
+  }
+  Swal.fire({title: msg, timer: 800, showConfirmButton: false, icon: 'info'});
+}
+
+// 页面加载时应用主题
+document.addEventListener('DOMContentLoaded', function() {
+    applyTheme();
+});
+
+function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+    } else {
+        document.exitFullscreen().catch(() => {});
+    }
+}
+
+function showContentList() {
+  var all = listeningExercises || [];
+  if (!all.length) {
+    Swal.fire({icon:'info', title:'暂无内容', text:'当前模式还没有练习题', confirmButtonColor:'#20c997'});
+    return;
+  }
+  var html = '<div class="content-list">';
+  all.forEach(function(ex, i) {
+    html += '<div class="content-item" onclick="var s=Swal;s.close();listeningIndex=' + i + ';renderListeningQuestion();" style="cursor:pointer;padding:12px 16px;border-bottom:1px solid #f5f5f5;display:flex;gap:12px;align-items:flex-start;">';
+    html += '<div style="width:28px;height:28px;border-radius:50%;background:#20c997;color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0;">' + (i+1) + '</div>';
+    html += '<div style="flex:1;"><div style="font-size:17px;font-weight:600;color:#1a1a1a;">' + (ex.chinese || '') + '</div><div style="font-size:13px;color:#999;margin-top:1px;">' + (ex.english || '') + '</div></div>';
+    html += '</div>';
+  });
+  html += '</div>';
+  Swal.fire({title:'本课时句子列表', html:html, showConfirmButton:true, confirmButtonText:'关闭', confirmButtonColor:'#20c997', width:500, padding:'0 0 16px'});
+}
+
+function showListeningHelp() {
+  Swal.fire({
+    title: '听力练习操作说明',
+    html: '<div style="text-align:left;font-size:14px;color:#555;line-height:1.8;"><p style="font-weight:600;color:#2563eb;margin-bottom:10px;font-size:15px;">📖 听力浏览</p><div style="margin-bottom:14px;padding-left:6px;"><div style="margin-bottom:8px;"><span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:#20c997;color:#fff;text-align:center;line-height:24px;font-size:13px;font-weight:600;margin-right:8px;">1</span><strong>分析卡片</strong> — 页面显示句子的逐词分析卡片（含<b>拼音</b>和<b>词性</b>注释）</div><div style="margin-bottom:8px;"><span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:#20c997;color:#fff;text-align:center;line-height:24px;font-size:13px;font-weight:600;margin-right:8px;">2</span><strong>原声朗读</strong> — 点击<b>播放按钮</b>播放句子原声朗读</div><div style="margin-bottom:8px;"><span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:#20c997;color:#fff;text-align:center;line-height:24px;font-size:13px;font-weight:600;margin-right:8px;">3</span><strong>语法解析</strong> — 点击<b>句子解析</b>按钮查看语法结构说明</div><div style="margin-bottom:8px;"><span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:#20c997;color:#fff;text-align:center;line-height:24px;font-size:13px;font-weight:600;margin-right:8px;">4</span><strong>显示控制</strong> — 顶部开关可独立控制<b>图片</b>和<b>拼音</b>的显示/隐藏</div></div><p style="font-weight:600;color:#f57c00;margin-bottom:10px;font-size:15px;">🎤 口语评测</p><div style="margin-bottom:14px;padding-left:6px;"><div style="margin-bottom:8px;"><span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:#f57c00;color:#fff;text-align:center;line-height:24px;font-size:13px;font-weight:600;margin-right:8px;">5</span><strong>口语跟读</strong> — 点击<b>麦克风按钮</b>进行口语跟读评测录音</div><div style="margin-bottom:8px;"><span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:#f57c00;color:#fff;text-align:center;line-height:24px;font-size:13px;font-weight:600;margin-right:8px;">6</span><strong>句子切换</strong> — 通过<b>上一句</b>和<b>下一句</b>按钮在句子之间切换</div><div style="margin-bottom:8px;"><span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:#f57c00;color:#fff;text-align:center;line-height:24px;font-size:13px;font-weight:600;margin-right:8px;">7</span><strong>进度追踪</strong> — 底部进度条显示当前进度和累计得分</div></div></div>',
+    confirmButtonText: '知道了',
+    confirmButtonColor: '#20c997',
+    width: 480
+  });
+}
+</script>
+
+{% endblock %}

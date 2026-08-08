@@ -1,0 +1,11 @@
+/*左侧导航菜单样式*/
+
+.nav-slider .list-group-item.active {
+    color: white;
+    background-color: #20c997;
+}
+
+.accordion a:hover {
+    color: white;
+    background-color: #20c997;
+}
